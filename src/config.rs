@@ -2,7 +2,7 @@ use std::time::Duration;
 use anyhow::{Context as _, Error};
 use confique::{serde::{self, Deserialize as _}, Config as _};
 
-use crate::{http::HttpConfig, opencast::OpencastConfig};
+use crate::{http::HttpConfig, jwt::JwtConfig, opencast::OpencastConfig};
 
 
 
@@ -25,41 +25,6 @@ pub struct Config {
 }
 
 
-
-
-#[derive(Debug, confique::Config)]
-pub struct JwtConfig {
-    /// URL to a JWKS containing public keys used for verifying JWT signatures.
-    /// Example: `https://tobira.example.com/.well-known/jwks.json`
-    pub jwks_url: String,
-
-    /// Where to look for a JWT in the HTTP request. First source has highest
-    /// priority. Each array element is an object. Possible sources:
-    ///
-    /// - `{ source = "query", name = "jwt" }`: from URL query parameter "jwt".
-    ///   `name` can be chosen arbitrarily. The first parameter with that name
-    ///   is used.
-    /// - `{ source = "header", name = "Authorization", prefix = "Bearer " }`:
-    ///   from HTTP header with the given name. The optional `prefix` is
-    ///   stripped from the header value.
-    #[config(
-        default = [{ "source": "query", "name": "jwt" }],
-        validate(sources.len() > 0, "must not be empty"),
-    )]
-    pub sources: Vec<JwtSource>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-#[serde(tag = "source", rename_all = "snake_case")]
-pub enum JwtSource {
-    Query {
-        name: String,
-    },
-    Header {
-        name: String,
-        prefix: Option<String>,
-    },
-}
 
 
 /// Makes sure that the given string is a valid URL path.

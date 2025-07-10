@@ -22,6 +22,7 @@ pub struct PathParts<'a> {
     start_suffix: u16,
 }
 
+#[allow(dead_code)] // TODO
 impl<'a> PathParts<'a> {
     /// Parses the given path into its components. Returns `None` if the path
     /// is not understood, does not start with `/` or does not start with any

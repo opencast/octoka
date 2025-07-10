@@ -6,7 +6,7 @@ use hyper::{body::{Bytes, Incoming}, header::HeaderValue, server::conn::http1, s
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
-use crate::{auth, config::{Config, JwtSource}, opencast::PathParts, prelude::*};
+use crate::{auth, config::Config, jwt::{self, JwtSource}, opencast::PathParts, prelude::*};
 
 mod config;
 mod fs;
@@ -47,7 +47,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> OurResponse {
     let jwt = jwt.as_ref().map(|cow| cow.as_ref());
 
     // Perform auth check
-    let is_allowed = auth::is_allowed(path, jwt);
+    let is_allowed = auth::is_allowed(path, jwt, &ctx).await;
     if !is_allowed {
         trace!(path = req.uri().path(), jwt, "response: 403 Forbidden");
         return error_response(StatusCode::FORBIDDEN);
@@ -120,15 +120,16 @@ fn error_response(status: StatusCode) -> OurResponse {
 }
 
 /// Data available to each request handler via reference.
-struct Context {
-    config: Config,
+pub struct Context {
+    pub config: Config,
+    pub jwt: jwt::Context,
 }
 
 /// Main entry point: starting the HTTP server.
 ///
 /// This is mainly plumbing code and does not contain much interesting logic.
-pub async fn serve(config: Config) -> Result<(), Error> {
-    let addr = SocketAddr::from((config.http.address, config.http.port));
+pub async fn serve(ctx: Context) -> Result<(), Error> {
+    let addr = SocketAddr::from((ctx.config.http.address, ctx.config.http.port));
 
     let listener = TcpListener::bind(addr).await?;
     let graceful = hyper_util::server::graceful::GracefulShutdown::new();
@@ -136,8 +137,8 @@ pub async fn serve(config: Config) -> Result<(), Error> {
 
     let http = http1::Builder::new();
 
-    let shutdown_timeout = config.http.shutdown_timeout;
-    let ctx = Arc::new(Context { config });
+    let shutdown_timeout = ctx.config.http.shutdown_timeout;
+    let ctx = Arc::new(ctx);
 
     info!("Listening on http://{}", addr);
     loop {
