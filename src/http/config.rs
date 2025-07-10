@@ -25,7 +25,7 @@ pub struct HttpConfig {
     #[config(default = "127.0.0.1")]
     pub address: IpAddr,
 
-    // How long to wait for active connections to terminate when shutting down.
+    /// How long to wait for active connections to terminate when shutting down.
     #[config(default = "3s", deserialize_with = crate::config::deserialize_duration)]
     pub shutdown_timeout: Duration,
 }

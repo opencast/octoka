@@ -9,6 +9,7 @@ anyhow = "1.0.96"
 arc-swap = "1.7.1"
 base64 = "0.22.1"
 bytes = "1.10.1"
+clap = { version = "4.5.41", features = ["derive"] }
 confique = { version = "0.3.0", features = ["toml"] }
 elliptic-curve = { version = "0.13.8", features = ["jwk"] }
 form_urlencoded = "1.2.1"

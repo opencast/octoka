@@ -11,6 +11,11 @@ pub fn load() -> Result<Config, Error> {
         .context("failed to load config file")
 }
 
+pub fn template() -> String {
+    let mut options = confique::toml::FormatOptions::default();
+    options.general.nested_field_gap = 2;
+    confique::toml::template::<Config>(options)
+}
 
 #[derive(Debug, confique::Config)]
 pub struct Config {

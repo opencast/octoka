@@ -3,7 +3,6 @@ use std::path::PathBuf;
 #[derive(Debug, confique::Config)]
 pub struct OpencastConfig {
     /// Path to the Opencast `downloads/` folder, e.g. `/mnt/opencast/downloads`.
-    // TODO: any reasonable default we can set?
     pub downloads_path: PathBuf,
 
     /// List of possible path prefixes that should be handled by sfs. For most
