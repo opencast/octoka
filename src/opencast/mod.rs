@@ -66,6 +66,12 @@ impl<'a> PathParts<'a> {
         &self.path[self.start_org as usize + 1..]
     }
 
+    /// Path without prefix or suffix, i.e. pointing to the event directory
+    /// inside the downloads directory.
+    pub fn rel_event_dir(&self) -> &'a str {
+        &self.path[self.start_org as usize + 1..self.start_suffix as usize]
+    }
+
     /// The organization, e.g. `mh_default_org` in single-tenant systems.
     pub fn org(&self) -> &'a str {
         &self.path[self.start_org as usize + 1..self.start_channel as usize]

@@ -34,9 +34,12 @@ async fn main() -> Result<()> {
 
         Command::Run => {
             let config = config::load()?;
+            let downloads_path = config.opencast.downloads_path.canonicalize()
+                .context("could not canonicalize `opencast.downloads_path`")?;
             let ctx = http::Context {
                 jwt: jwt::Context::new(&config.jwt).await?,
                 config,
+                downloads_path,
             };
             http::serve(ctx).await?;
         }

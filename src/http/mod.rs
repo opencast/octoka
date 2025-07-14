@@ -1,8 +1,8 @@
-use std::{borrow::Cow, convert::Infallible, net::SocketAddr, panic::AssertUnwindSafe, sync::Arc};
+use std::{borrow::Cow, convert::Infallible, net::SocketAddr, panic::AssertUnwindSafe, path::PathBuf, pin::Pin, sync::Arc, task::Poll};
 
 use futures::FutureExt as _;
 use http_body_util::Full;
-use hyper::{body::{Bytes, Incoming}, header::HeaderValue, server::conn::http1, service::service_fn, HeaderMap, Method, Request, Response, StatusCode, Uri};
+use hyper::{body::{Bytes, Incoming}, header::HeaderValue, server::conn::http1, service::service_fn, HeaderMap, Method, Request, StatusCode, Uri};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
@@ -16,9 +16,7 @@ pub use self::{
 };
 
 
-type OurResponse = Response<Full<Bytes>>;
-
-async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> OurResponse {
+async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     trace!("incoming req: {} {}", req.method(), req.uri().path());
 
     if req.method() != &Method::GET {
@@ -55,7 +53,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> OurResponse {
 
     // Access is allowed: reply 200 and potentially serve file/add headers.
     if ctx.config.http.serve_files {
-        fs::serve_file(path).await
+        fs::serve_file(path, req.headers(), &ctx).await
     } else {
         let mut builder = Response::builder();
 
@@ -71,7 +69,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> OurResponse {
         }
 
         builder
-            .body(Full::new(Bytes::new()))
+            .body(Body::Empty)
             .expect("failed to build response with empty body")
     }
 }
@@ -111,11 +109,11 @@ fn find_jwt_in_header<'h>(
 }
 
 
-fn error_response(status: StatusCode) -> OurResponse {
+fn error_response(status: StatusCode) -> Response {
     let body = format!("{} {}", status.as_u16(), status.canonical_reason().unwrap_or_default());
     Response::builder()
         .status(status)
-        .body(Full::new(Bytes::from(body)))
+        .body(Body::tiny(body))
         .unwrap()
 }
 
@@ -123,6 +121,7 @@ fn error_response(status: StatusCode) -> OurResponse {
 pub struct Context {
     pub config: Config,
     pub jwt: jwt::Context,
+    pub downloads_path: PathBuf,
 }
 
 /// Main entry point: starting the HTTP server.
@@ -188,8 +187,8 @@ async fn shutdown_signal() {
 /// resolving/polling that given future. This ensures that we always answer with
 /// `500` instead of just crashing the thread and closing the connection.
 async fn handle_internal_errors(
-    future: impl Future<Output = OurResponse>,
-) -> Result<OurResponse, Infallible> {
+    future: impl Future<Output = Response>,
+) -> Result<Response, Infallible> {
     // TODO: We want to log lots of information about the exact HTTP request in
     // the error case.
 
@@ -222,9 +221,40 @@ async fn handle_internal_errors(
             Ok(
                 Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body("Internal server error: panic".into())
+                    .body(Body::tiny("Internal server error: panic"))
                     .unwrap()
             )
+        }
+    }
+}
+
+type Response<B = Body> = hyper::Response<B>;
+
+enum Body {
+    Empty,
+    Tiny(Full<Bytes>),
+    File(fs::FileBody),
+}
+
+impl Body {
+    fn tiny(s: impl Into<String>) -> Self {
+        Self::Tiny(Full::new(s.into().into()))
+    }
+}
+
+impl hyper::body::Body for Body {
+    type Data = Bytes;
+    type Error = std::io::Error;
+
+    fn poll_frame(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<std::result::Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
+        match *self {
+            Self::Empty => return Poll::Ready(None),
+            Self::Tiny(ref mut inner) => return Pin::new(inner).poll_frame(cx)
+                .map_err(|never| match never {}),
+            Self::File(ref mut file) => Pin::new(&mut file.0).poll_frame(cx),
         }
     }
 }
