@@ -1,3 +1,5 @@
+use std::time::SystemTime;
+
 use bytes::Bytes;
 use futures::TryStreamExt as _;
 use http_body_util::combinators::BoxBody;
@@ -38,12 +40,28 @@ pub async fn serve_file(
 
     // Open file and check size
     let mut file = handle_io_err!(tokio::fs::File::open(&fs_path).await, "opening file");
-    let file_size = handle_io_err!(file.metadata().await, "reading file metadata").len();
+    let metadata = handle_io_err!(file.metadata().await, "reading file metadata");
+    let file_size = metadata.len();
+
+    // We `unwrap` here as this will always return `Ok` on most platforms.
+    // Specifically, Unix and Windows always return `Ok` to the best of my
+    // knowledge.
+    let mtime = metadata.modified()
+        .expect("platform does not support 'modified' timestamp");
+    let etag = etag(mtime, file_size, &metadata);
+
+
 
     let mut response = Response::builder()
-        .header(header::ACCEPT_RANGES, "bytes");
+        .header(header::ACCEPT_RANGES, "bytes")
+        .header(header::LAST_MODIFIED, httpdate::fmt_http_date(mtime))
+        .header(header::ETAG, &etag);
     if let Some(mime) = mime_guess::from_path(&fs_path).first() {
         response = response.header("Content-Type", mime.to_string());
+    }
+
+    if is_unmodified(headers, &etag, mtime) {
+        return response.status(StatusCode::NOT_MODIFIED).body(Body::Empty).unwrap();
     }
 
     // Check if this is a `Range` request.
@@ -134,4 +152,77 @@ fn handle_io_error(e: &std::io::Error, action: &str) -> Response {
     }
 
     super::error_response(code)
+}
+
+/// Returns a file's value for the `ETag` header, which contains the mtime, size
+/// and, on Unix, also the inode number. Opencast itself uses mtime, size and
+/// filename. The filename is not necessary though, as the ETag only needs to
+/// be unique for the same URI. ETags of different filenames (and thus URIs) are
+/// never compared by browsers.
+///
+/// Of course, hashing the actual file content would be best, but is not viable
+/// for the huge files we are dealing with.
+fn etag(mtime: SystemTime, size: u64, metadata: &std::fs::Metadata) -> String {
+    // On unix, we also add the inode number to the ETag. It can protect against
+    // "content change, same etag" situations when a new file is moved to the
+    // new location. It's not that important, but helps a bit. Including the
+    // raw inode number in a public response does not seem to be a security
+    // problem: https://security.stackexchange.com/a/178149/147555
+    #[cfg(target_family = "unix")]
+    fn etag_extra(out: &mut String, metadata: &std::fs::Metadata) {
+        use std::{fmt::Write, os::unix::fs::MetadataExt};
+
+        write!(out, ":{}", metadata.ino()).unwrap();
+    }
+
+    #[cfg(not(target_family = "unix"))]
+    fn etag_extra(_: &mut String, _: &std::fs::Metadata) {}
+
+    let mtime_ms = match mtime.duration_since(SystemTime::UNIX_EPOCH) {
+        Ok(duration) => duration.as_millis() as i128,
+        Err(e) => -(e.duration().as_millis() as i128),
+    };
+
+
+    let mut out = format!("\"{mtime_ms}:{size}");
+    etag_extra(&mut out, metadata);
+    out.push('"');
+    out
+}
+
+/// Checks `If-None-Match` and `If-Modified-Since` headers and returns whether
+/// we should reply with "304 Unmodified".
+fn is_unmodified(
+    headers: &HeaderMap,
+    etag: &str,
+    mtime: SystemTime,
+) -> bool {
+    // The `If-None-Match` header has priority over `If-Unmodified-Since`.
+    if let Some(if_none_match) = headers.get(header::IF_NONE_MATCH) {
+        // Makes no sense to set in this case, but we still handle it.
+        if if_none_match == "*" {
+            return true;
+        }
+
+        // We ignore the "/W" prefix as we need to perform a weak comparison. We
+        // don't exactly check for a well-formed header,  but the spec doesn't
+        // mandate that. If we find the actual etag somewhere, that's fine.
+        return if_none_match.as_bytes()
+            .split(|b| *b == b',')
+            .map(|tag| tag.trim_ascii())
+            .map(|tag| tag.strip_prefix(b"W/").unwrap_or(tag))
+            .any(|tag| tag == etag.as_bytes());
+    }
+
+
+    // If the value is not valid, the spec says we should ignore the header.
+    let if_modified_since = headers.get(header::IF_MODIFIED_SINCE)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| httpdate::parse_http_date(s.trim()).ok());
+    if let Some(if_modified_since) = if_modified_since {
+        return mtime < if_modified_since;
+    }
+
+    // If no header is present, we reply with normal 200.
+    false
 }
