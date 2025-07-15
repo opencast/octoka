@@ -1,4 +1,4 @@
-use std::{borrow::Cow, convert::Infallible, net::SocketAddr, panic::AssertUnwindSafe, path::PathBuf, pin::Pin, sync::Arc, task::Poll};
+use std::{borrow::Cow, convert::Infallible, error::Error, net::SocketAddr, panic::AssertUnwindSafe, path::PathBuf, pin::Pin, sync::Arc, task::Poll};
 
 use futures::FutureExt as _;
 use http_body_util::Full;
@@ -127,7 +127,7 @@ pub struct Context {
 /// Main entry point: starting the HTTP server.
 ///
 /// This is mainly plumbing code and does not contain much interesting logic.
-pub async fn serve(ctx: Context) -> Result<(), Error> {
+pub async fn serve(ctx: Context) -> Result<()> {
     let addr = SocketAddr::from((ctx.config.http.address, ctx.config.http.port));
 
     let listener = TcpListener::bind(addr).await?;
@@ -151,7 +151,7 @@ pub async fn serve(ctx: Context) -> Result<(), Error> {
                 let fut = graceful.watch(conn);
                 tokio::spawn(async move {
                     if let Err(e) = fut.await {
-                        error!("Error serving connection: {:?}", e);
+                        log_hyper_error(e);
                     }
                 });
             },
@@ -226,6 +226,43 @@ async fn handle_internal_errors(
             )
         }
     }
+}
+
+fn log_hyper_error(err: hyper::Error) {
+    // Many errors are really not critical and some are unfortunately expected
+    // to occur. For example, browsers often close connections prematurely,
+    // especially when loading video. Such an error doesn't require attention
+    // from us at all.
+    //
+    // I'm not 100% sure what exactly is fine to ignore and what not, but this
+    // code can adjusted over time. Also see:
+    // https://github.com/hyperium/hyper/discussions/3915
+    let warn = if let Some(io) = err.source().and_then(|s| s.downcast_ref::<std::io::Error>()) {
+        match io.kind() {
+            std::io::ErrorKind::ConnectionReset => false,
+            std::io::ErrorKind::NotConnected => false,
+            _ => true
+        }
+    } else {
+        err.is_timeout() || err.is_user() || err.is_closed() || err.is_canceled()
+    };
+
+    macro_rules! debug_or_warn {
+        ($($t:tt)*) => {
+            if warn {
+                warn!($($t)*);
+            } else {
+                debug!($($t)*);
+            }
+        };
+    }
+
+    let full_chain = anyhow::Chain::new(&err)
+        .map(|e| e.to_string())
+        .collect::<Vec<_>>()
+        .join(", caused by ");
+
+    debug_or_warn!("HTTP error: {full_chain} ({err:?})");
 }
 
 type Response<B = Body> = hyper::Response<B>;
