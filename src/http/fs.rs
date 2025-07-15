@@ -1,10 +1,9 @@
 use bytes::Bytes;
 use futures::TryStreamExt as _;
-use http_body_util::StreamBody;
+use http_body_util::combinators::BoxBody;
 use http_range::{HttpRange, HttpRangeParseError};
 use hyper::{header, HeaderMap, StatusCode};
-use tokio::io::{AsyncReadExt as _, AsyncSeekExt as _};
-use tokio_util::codec::{BytesCodec, FramedRead};
+use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncSeekExt as _};
 
 use crate::{opencast::PathParts, prelude::*};
 use super::{Body, Context, Response};
@@ -80,28 +79,23 @@ pub async fn serve_file(
                 file_size,
             ));
 
-        FileBody::new(file, range.length)
+        make_file_body(file.take(range.length))
     } else {
         response = response.header(header::CONTENT_LENGTH, file_size);
-        FileBody::new(file, file_size)
+        make_file_body(file)
     };
 
     response.body(Body::File(body)).expect("invalid response")
 }
 
 /// `Body` to stream a file as HTTP response.
-pub(super) struct FileBody(
-    pub(super) Box<
-        dyn Sync + Send + Unpin + hyper::body::Body<Error = std::io::Error, Data = Bytes>
-    >,
-);
+pub(super) type FileBody = BoxBody<Bytes, std::io::Error>;
 
-impl FileBody {
-    fn new(file: tokio::fs::File, limit: u64) -> Self {
-        let reader = FramedRead::new(file.take(limit), BytesCodec::new())
-            .map_ok(|bytes| hyper::body::Frame::data(bytes.freeze()));
-        Self(Box::new(StreamBody::new(reader)))
-    }
+fn make_file_body<R: AsyncRead + Send + Sync + 'static>(reader: R) -> FileBody {
+    let reader = tokio_util::io::ReaderStream::new(reader)
+        .map_ok(hyper::body::Frame::data);
+    let body = http_body_util::StreamBody::new(reader);
+    BoxBody::new(body)
 }
 
 fn handle_io_error(e: &std::io::Error, action: &str) -> Response {

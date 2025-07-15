@@ -254,7 +254,7 @@ impl hyper::body::Body for Body {
             Self::Empty => return Poll::Ready(None),
             Self::Tiny(ref mut inner) => return Pin::new(inner).poll_frame(cx)
                 .map_err(|never| match never {}),
-            Self::File(ref mut file) => Pin::new(&mut file.0).poll_frame(cx),
+            Self::File(ref mut file) => Pin::new(file).poll_frame(cx),
         }
     }
 }
