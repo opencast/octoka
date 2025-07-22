@@ -31,3 +31,10 @@ tokio = { version = "1.43.0", features = ["fs", "macros", "net", "rt-multi-threa
 tokio-util = "0.7.15"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
+
+[dev-dependencies]
+divan = "0.1.21"
+
+[[bench]]
+name = "crypto"
+harness = false
