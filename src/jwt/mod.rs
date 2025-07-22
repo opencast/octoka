@@ -1,7 +1,6 @@
 use std::{sync::Arc, time::Instant};
 
 use arc_swap::ArcSwap;
-use hyper::Uri;
 
 use crate::{prelude::*, util::{self, SimpleHttpClient}};
 
@@ -10,7 +9,7 @@ mod crypto;
 mod decode;
 mod jwks;
 
-pub use self::config::{JwtConfig, JwtSource};
+pub use self::config::{JwtConfig, JwtSource, JwksUrl};
 
 
 
@@ -42,7 +41,7 @@ impl Context {
     pub async fn new(config: &JwtConfig) -> Result<Self> {
         let http_client = util::http_client()?;
         info!("Fetching trusted keys for initialization");
-        let keys = Self::fetch_keys(&config.jwks_url, &http_client).await;
+        let keys = Self::fetch_keys(&config.trusted_keys, &http_client).await;
 
         Ok(Self {
             config: config.clone(),
@@ -55,7 +54,7 @@ impl Context {
     /// are logged, but old keys are invalidated in any case.
     pub async fn refresh_keys(&self) {
         debug!("Refreshing trusted keys");
-        let keys = Self::fetch_keys(&self.config.jwks_url, &self.http_client).await;
+        let keys = Self::fetch_keys(&self.config.trusted_keys, &self.http_client).await;
         self.keys.store(Arc::new(keys));
     }
 
@@ -66,22 +65,23 @@ impl Context {
         }
     }
 
-    async fn fetch_keys(uri: &Uri, http_client: &SimpleHttpClient) -> Keys {
-        let keys = match jwks::fetch(uri, http_client).await {
-            Err(e) => {
-                warn!("failed to fetch keys: {e}");
-                Vec::new()
-            }
-            Ok(keys) => {
-                if keys.is_empty() {
-                    warn!("JWKS URL had no valid keys");
+    async fn fetch_keys(urls: &[JwksUrl], http_client: &SimpleHttpClient) -> Keys {
+        let mut keys_out = Vec::new();
+        for url in urls {
+            let url = &url.0;
+            match jwks::fetch(url, http_client).await {
+                Err(e) => warn!(%url, "failed to fetch keys: {e}"),
+                Ok(keys) => {
+                    if keys.is_empty() {
+                        warn!(%url, "JWKS URL had no valid keys");
+                    }
+                    keys_out.extend(keys);
                 }
-                keys
-            }
-        };
+            };
+        }
 
         Keys {
-            keys,
+            keys: keys_out,
             last_fetch: Instant::now(),
         }
     }

@@ -1,14 +1,18 @@
-use std::{borrow::Cow, net::IpAddr, time::Duration};
+use std::{net::IpAddr, time::Duration};
 
 use hyper::Uri;
 
 
 #[derive(Debug, Clone, confique::Config)]
 pub struct JwtConfig {
-    /// URL to a JWKS containing public keys used for verifying JWT signatures.
-    /// Example: `https://tobira.example.com/.well-known/jwks.json`
-    #[config(deserialize_with = deserialize_uri)]
-    pub jwks_url: Uri,
+    /// List of URLs to a JWKS containing public keys used for verifying JWT
+    /// signatures. IMPORTANT: this is where the trust of the whole operation
+    /// stems from! Only specify URLs to services that you fully trust to give
+    /// access to Opencast resources.
+    ///
+    /// Example: ["https://tobira.example.com/.well-known/jwks.json"]
+    #[config(validate = validate_trusted_keys)]
+    pub trusted_keys: Vec<JwksUrl>,
 
     /// Where to look for a JWT in the HTTP request. First source has highest
     /// priority. Each array element is an object. Possible sources:
@@ -48,43 +52,43 @@ pub enum JwtSource {
     },
 }
 
-/// Deserialize a `Uri` from string and makes sure it uses HTTPS, has no
-/// username, password or query part.
-pub fn deserialize_uri<'de, D>(deserializer: D) -> Result<Uri, D::Error>
-    where D: serde::Deserializer<'de>,
-{
-    use serde::Deserialize;
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
+#[serde(try_from = "String")]
+pub struct JwksUrl(pub Uri);
 
-    macro_rules! err {
-        ($($t:tt)*) => {
-            <D::Error as serde::de::Error>::custom(format!($($t)*))
-        };
+impl TryFrom<String> for JwksUrl {
+    type Error = String;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        let uri: Uri = s.parse().map_err(|e| format!("invalid URI: {e}"))?;
+
+        // Must have host (and optional port), but no user information.
+        match uri.authority() {
+            None => return Err("must have authority part".into()),
+            Some(authority) if authority.as_str().contains('@')
+                => return Err("must not contain user part".into()),
+            _ => {}
+        }
+
+        // Non-local URLs must use HTTPS
+        let host = uri.host().unwrap();
+        let is_local = host == "localhost"
+            || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback());
+        if !is_local && uri.scheme() != Some(&hyper::http::uri::Scheme::HTTPS) {
+            return Err("must use HTTPS".into());
+        }
+
+        // Must not have fragment part
+        if s.contains('#') {
+            return Err("must not contain fragment part (#...)".into());
+        }
+
+        Ok(Self(uri))
     }
+}
 
-    // Parse string as URI
-    let s = <Cow<'de, str>>::deserialize(deserializer)?;
-    let uri: Uri = s.parse().map_err(|e| err!("invalid URI: {e}"))?;
-
-    // Must have host (and optional port), but no user information.
-    match uri.authority() {
-        None => return Err(err!("must have authority part")),
-        Some(authority) if authority.as_str().contains('@')
-            => return Err(err!("must not contain user part")),
-        _ => {}
-    }
-
-    // Non-local URLs must use HTTPS
-    let host = uri.host().unwrap();
-    let is_local = host == "localhost"
-        || host.parse::<IpAddr>().is_ok_and(|ip| ip.is_loopback());
-    if !is_local && uri.scheme() != Some(&hyper::http::uri::Scheme::HTTPS) {
-        return Err(err!("must use HTTPS"));
-    }
-
-    // Must not have fragment part
-    if s.contains('#') {
-        return Err(err!("must not contain fragment part (#...)"));
-    }
-
-    Ok(uri)
+fn validate_trusted_keys(keys: &Vec<JwksUrl>) -> Result<(), &'static str> {
+    crate::config::validate_not_empty(keys)?;
+    crate::config::validate_unique(keys)?;
+    Ok(())
 }

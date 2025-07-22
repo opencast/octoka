@@ -40,6 +40,20 @@ pub fn validate_url_path(value: &String) -> Result<(), &'static str> {
     }
 }
 
+pub fn validate_unique<T: std::hash::Hash + Eq>(list: &[T]) -> Result<(), &'static str> {
+    if <std::collections::HashSet<_>>::from_iter(list).len() != list.len() {
+        return Err("duplicate entries");
+    }
+    Ok(())
+}
+
+pub fn validate_not_empty<T>(list: &[T]) -> Result<(), &'static str> {
+    if list.is_empty() {
+        return Err("must not be empty");
+    }
+    Ok(())
+}
+
 
 /// Custom format for durations. We allow a couple useful units and required
 /// a unit to increase readability of config files.

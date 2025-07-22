@@ -20,13 +20,8 @@ pub struct OpencastConfig {
 }
 
 fn validate_path_prefixes(paths: &Vec<String>) -> Result<(), &'static str> {
-    if paths.is_empty() {
-        return Err("must not be empty");
-    }
-
-    if paths.iter().collect::<std::collections::HashSet<_>>().len() != paths.len() {
-        return Err("contains duplicate entries");
-    }
+    crate::config::validate_not_empty(paths)?;
+    crate::config::validate_unique(paths)?;
 
     for path in paths {
         crate::config::validate_url_path(path)?;
