@@ -2,7 +2,7 @@ use std::{borrow::Cow, convert::Infallible, error::Error, net::SocketAddr, panic
 
 use futures::FutureExt as _;
 use http_body_util::Full;
-use hyper::{body::{Bytes, Incoming}, header::HeaderValue, server::conn::http1, service::service_fn, HeaderMap, Method, Request, StatusCode, Uri};
+use hyper::{body::{Bytes, Incoming}, header::{self, HeaderValue}, server::conn::http1, service::service_fn, HeaderMap, Method, Request, StatusCode, Uri};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
@@ -16,8 +16,21 @@ pub use self::{
 };
 
 
+const ALLOWED_METHODS: &str = "GET, OPTIONS";
+
 async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     trace!("incoming req: {} {}", req.method(), req.uri().path());
+
+    // Handle OPTIONS requests
+    if req.method() == &Method::OPTIONS {
+        let mut builder = Response::builder()
+            .status(StatusCode::NO_CONTENT)
+            .header(header::ALLOW, ALLOWED_METHODS);
+
+        add_cors_headers(&req, &mut builder, &ctx.config.http);
+
+        return builder.body(Body::Empty).unwrap();
+    }
 
     if req.method() != &Method::GET {
         return error_response(StatusCode::METHOD_NOT_ALLOWED);
@@ -53,7 +66,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
 
     // Access is allowed: reply 200 and potentially serve file/add headers.
     if ctx.config.http.serve_files {
-        fs::serve_file(path, req.headers(), &ctx).await
+        fs::serve_file(path, &req, &ctx).await
     } else {
         let mut builder = Response::builder();
 
@@ -68,10 +81,69 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
             builder = builder.header("X-Accel-Redirect", value);
         }
 
+        add_cors_headers(&req, &mut builder, &ctx.config.http);
         builder
             .body(Body::Empty)
             .expect("failed to build response with empty body")
     }
+}
+
+/// Adds CORS headers IF we allow cors for the request's Origin.
+fn add_cors_headers(
+    req: &Request<Incoming>,
+    response: &mut http::response::Builder,
+    config: &HttpConfig,
+) {
+    // Note: header values returned here have no leading or trailing
+    // whitespace. See https://github.com/seanmonstar/httparse/pull/48
+    // and RFC 7230 section 3.2.3.
+
+    // Only allow CORS if Origin is allowed by the config. This also excludes
+    // `null`.
+    let origin = match req.headers().get(header::ORIGIN) {
+        Some(h) if config.cors_allowed_origins.iter().any(|o| h == o.as_str()) => h,
+        origin => {
+            trace!(?origin, "CORS denied as origin not whitelisted");
+            return;
+        }
+    };
+
+    if req.method() == &Method::OPTIONS {
+        // Only allow 'Authorization' header.
+        match req.headers().get(header::ACCESS_CONTROL_REQUEST_HEADERS) {
+            Some(h) if h.as_bytes()
+                .split(|b| *b == b',')
+                .all(|rh| rh.trim_ascii().eq_ignore_ascii_case(b"Authorization")) => {}
+            req_headers => {
+                trace!(?req_headers, "CORS denied due to disallowed headers");
+                return;
+            }
+        }
+
+        // Require this header to be "GET".
+        match req.headers().get(header::ACCESS_CONTROL_REQUEST_METHOD) {
+            Some(h) if h == "GET" => {}
+            method => {
+                trace!(?method, "CORS denied due to disallowed method");
+                return;
+            }
+        }
+    }
+
+    // At this point, we allow the CORS request
+    trace!(?origin, "Adding CORS headers");
+    response.headers_mut().unwrap().extend([
+        (header::ACCESS_CONTROL_ALLOW_ORIGIN, origin.clone()),
+        (header::ACCESS_CONTROL_ALLOW_CREDENTIALS, HeaderValue::from_static("true")),
+        (header::ACCESS_CONTROL_ALLOW_METHODS, HeaderValue::from_static(ALLOWED_METHODS)),
+        (header::ACCESS_CONTROL_ALLOW_HEADERS, HeaderValue::from_static("Authorization")),
+
+        // We allow browser to cache this CORS result for 24h. We allow it for the same
+        // input all the time, so nothing here will change, except if the config is
+        // changed, which happens very rarely. I cannot really think of anything that
+        // would make this caching unsafe.
+        (header::ACCESS_CONTROL_MAX_AGE, HeaderValue::from_static("86400")),
+    ]);
 }
 
 /// Returns the value of the first query parameter with the given name.

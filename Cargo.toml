@@ -14,6 +14,7 @@ confique = { version = "0.3.0", features = ["toml"] }
 elliptic-curve = { version = "0.13.8", features = ["jwk"] }
 form_urlencoded = "1.2.1"
 futures = { version = "0.3.1", default-features = false, features = ["std"] }
+http = "1.3.1"
 http-body-util = "0.1.2"
 http-range = "0.1.5"
 httpdate = "1.0.3"

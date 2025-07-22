@@ -2,19 +2,20 @@ use std::time::SystemTime;
 
 use bytes::Bytes;
 use futures::TryStreamExt as _;
+use http::Request;
 use http_body_util::combinators::BoxBody;
 use http_range::{HttpRange, HttpRangeParseError};
-use hyper::{header, HeaderMap, StatusCode};
+use hyper::{body::Incoming, header, HeaderMap, StatusCode};
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncSeekExt as _};
 
-use crate::{opencast::PathParts, prelude::*};
+use crate::{http::add_cors_headers, opencast::PathParts, prelude::*};
 use super::{Body, Context, Response};
 
 
 /// Serves the file referred to by `path` directly from the file system.
 pub async fn serve_file(
     path: PathParts<'_>,
-    headers: &HeaderMap,
+    req: &Request<Incoming>,
     ctx: &Context,
 ) -> Response {
     macro_rules! handle_io_err {
@@ -56,16 +57,17 @@ pub async fn serve_file(
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::LAST_MODIFIED, httpdate::fmt_http_date(mtime))
         .header(header::ETAG, &etag);
+    add_cors_headers(&req, &mut response, &ctx.config.http);
     if let Some(mime) = mime_guess::from_path(&fs_path).first() {
         response = response.header("Content-Type", mime.to_string());
     }
 
-    if is_unmodified(headers, &etag, mtime) {
+    if is_unmodified(req.headers(), &etag, mtime) {
         return response.status(StatusCode::NOT_MODIFIED).body(Body::Empty).unwrap();
     }
 
     // Check if this is a `Range` request.
-    let body = if let Some(range_header) = headers.get(header::RANGE) {
+    let body = if let Some(range_header) = req.headers().get(header::RANGE) {
         let range = match HttpRange::parse_bytes(range_header.as_bytes(), file_size) {
             Ok(ranges) if ranges.len() == 1 => ranges[0],
             Ok(_) => {
