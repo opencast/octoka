@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Instant};
+use std::{sync::Arc, time::{Duration, Instant}};
 
 use arc_swap::ArcSwap;
 
@@ -12,6 +12,7 @@ mod jwks;
 pub use self::config::{JwtConfig, JwtSource, JwksUrl};
 
 
+const BACKGROUND_REFRESH_LEAD_TIME: Duration = Duration::from_secs(3);
 
 /// Processed information from a JWT relevant for authorization.
 #[derive(Debug)]
@@ -28,7 +29,7 @@ pub struct TokenInfo {
 pub struct Context {
     config: JwtConfig,
     http_client: SimpleHttpClient,
-    keys: ArcSwap<Keys>,
+    keys: Arc<ArcSwap<Keys>>,
 }
 
 struct Keys {
@@ -42,10 +43,27 @@ impl Context {
         let http_client = util::http_client()?;
         info!("Fetching trusted keys for initialization");
         let keys = Self::fetch_keys(&config.trusted_keys, &http_client).await;
+        let keys = Arc::new(ArcSwap::from_pointee(keys));
+
+        if config.background_key_refresh {
+            let http_client = http_client.clone();
+            let config = config.clone();
+            let keys = Arc::clone(&keys);
+            tokio::spawn(async move {
+                let sleep_time = config.key_cache_duration - BACKGROUND_REFRESH_LEAD_TIME;
+                loop {
+                    tokio::time::sleep(sleep_time).await;
+
+                    debug!("Refreshing trusted keys");
+                    let new_keys = Self::fetch_keys(&config.trusted_keys, &http_client).await;
+                    keys.store(Arc::new(new_keys));
+                }
+            });
+        }
 
         Ok(Self {
             config: config.clone(),
-            keys: ArcSwap::from_pointee(keys),
+            keys,
             http_client,
         })
     }

@@ -2,8 +2,11 @@ use std::{net::IpAddr, time::Duration};
 
 use hyper::Uri;
 
+use super::BACKGROUND_REFRESH_LEAD_TIME;
+
 
 #[derive(Debug, Clone, confique::Config)]
+#[config(validate = Self::validate)]
 pub struct JwtConfig {
     /// List of URLs to a JWKS containing public keys used for verifying JWT
     /// signatures. IMPORTANT: this is where the trust of the whole operation
@@ -29,6 +32,12 @@ pub struct JwtConfig {
     )]
     pub sources: Vec<JwtSource>,
 
+    /// Whether to regularly refetch `trusted_keys`. If `false`, they are
+    /// refetched on-the-fly if stale when handling an incoming request, slowing
+    /// down that request response.
+    #[config(default = true)]
+    pub background_key_refresh: bool,
+
     /// For how long keys fetched from JWKS URLs are considered valid. After
     /// this time, they are considered stale and won't be used anymore.
     #[config(default = "10min", deserialize_with = crate::config::deserialize_duration)]
@@ -50,6 +59,20 @@ pub enum JwtSource {
         name: String,
         prefix: Option<String>,
     },
+}
+
+impl JwtConfig {
+    fn validate(&self) -> Result<(), String> {
+        let min_duration = 2 * BACKGROUND_REFRESH_LEAD_TIME;
+        if self.background_key_refresh && self.key_cache_duration < min_duration {
+            return Err(format!(
+                "`key_cache_duration` too short for `background_key_refresh`; \
+                    should be at least {min_duration:.2?}",
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
