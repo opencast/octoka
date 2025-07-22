@@ -27,26 +27,12 @@ mod es256 {
         use super::*;
 
         #[divan::bench]
-        fn verify_ok(bencher: Bencher) {
+        fn verify(bencher: Bencher) {
             let signature = sig(SIGNATURE);
             let key = public_key();
 
             // Just make sure it is a success before running benchmark
             key.verify(MESSAGE, &signature).unwrap();
-
-            bencher.bench_local(move || {
-                black_box(key).verify(black_box(MESSAGE), black_box(&signature))
-            });
-        }
-
-        #[divan::bench]
-        fn verify_fail(bencher: Bencher) {
-            // Just change the signature somehow
-            let signature = sig(&SIGNATURE.replace('g', "F"));
-            let key = public_key();
-
-            // Just make sure it is a fail before running benchmark
-            key.verify(MESSAGE, &signature).unwrap_err();
 
             bencher.bench_local(move || {
                 black_box(key).verify(black_box(MESSAGE), black_box(&signature))
@@ -84,21 +70,10 @@ mod es256 {
         use super::*;
 
         #[divan::bench]
-        fn verify_ok(bencher: Bencher) {
+        fn verify(bencher: Bencher) {
             let key = public_key();
             let signature = base64_decode(SIGNATURE);
             signature::ECDSA_P256_SHA256_FIXED.verify_sig(&key, MESSAGE, &signature).unwrap();
-
-            bencher.bench_local(move || {
-                signature::ECDSA_P256_SHA256_FIXED.verify_sig(&key, MESSAGE, &signature)
-            });
-        }
-
-        #[divan::bench]
-        fn verify_fail(bencher: Bencher) {
-            let key = public_key();
-            let signature = base64_decode(&SIGNATURE.replace('g', "F"));
-            signature::ECDSA_P256_SHA256_FIXED.verify_sig(&key, MESSAGE, &signature).unwrap_err();
 
             bencher.bench_local(move || {
                 signature::ECDSA_P256_SHA256_FIXED.verify_sig(&key, MESSAGE, &signature)
@@ -147,26 +122,12 @@ mod es384 {
         use super::*;
 
         #[divan::bench]
-        fn verify_ok(bencher: Bencher) {
+        fn verify(bencher: Bencher) {
             let signature = sig(SIGNATURE);
             let key = public_key();
 
             // Just make sure it is a success before running benchmark
             key.verify(MESSAGE, &signature).unwrap();
-
-            bencher.bench_local(move || {
-                black_box(key).verify(black_box(MESSAGE), black_box(&signature))
-            });
-        }
-
-        #[divan::bench]
-        fn verify_fail(bencher: Bencher) {
-            // Just change the signature somehow
-            let signature = sig(&SIGNATURE.replace('g', "F"));
-            let key = public_key();
-
-            // Just make sure it is a fail before running benchmark
-            key.verify(MESSAGE, &signature).unwrap_err();
 
             bencher.bench_local(move || {
                 black_box(key).verify(black_box(MESSAGE), black_box(&signature))
@@ -205,21 +166,10 @@ mod es384 {
         use super::*;
 
         #[divan::bench]
-        fn verify_ok(bencher: Bencher) {
+        fn verify(bencher: Bencher) {
             let key = public_key();
             let signature = base64_decode(SIGNATURE);
             signature::ECDSA_P384_SHA384_FIXED.verify_sig(&key, MESSAGE, &signature).unwrap();
-
-            bencher.bench_local(move || {
-                signature::ECDSA_P384_SHA384_FIXED.verify_sig(&key, MESSAGE, &signature)
-            });
-        }
-
-        #[divan::bench]
-        fn verify_fail(bencher: Bencher) {
-            let key = public_key();
-            let signature = base64_decode(&SIGNATURE.replace('g', "F"));
-            signature::ECDSA_P384_SHA384_FIXED.verify_sig(&key, MESSAGE, &signature).unwrap_err();
 
             bencher.bench_local(move || {
                 signature::ECDSA_P384_SHA384_FIXED.verify_sig(&key, MESSAGE, &signature)
@@ -266,21 +216,10 @@ mod ed25519 {
         use ed25519_dalek::{SigningKey, Signature, pkcs8::DecodePrivateKey};
 
         #[divan::bench]
-        fn verify_ok(bencher: Bencher) {
+        fn verify(bencher: Bencher) {
             let key = key();
             let signature = Signature::from_slice(&base64_decode(SIGNATURE)).unwrap();
             key.verify(MESSAGE, &signature).unwrap();
-
-            bencher.bench_local(move || {
-                key.verify(MESSAGE, &signature)
-            });
-        }
-
-        #[divan::bench]
-        fn verify_fail(bencher: Bencher) {
-            let key = key();
-            let signature = Signature::from_slice(&base64_decode(&SIGNATURE.replace('w', "F"))).unwrap();
-            key.verify(MESSAGE, &signature).unwrap_err();
 
             bencher.bench_local(move || {
                 key.verify(MESSAGE, &signature)
@@ -306,21 +245,10 @@ mod ed25519 {
         use aws_lc_rs::signature::{self, Ed25519KeyPair, KeyPair, VerificationAlgorithm};
 
         #[divan::bench]
-        fn verify_ok(bencher: Bencher) {
+        fn verify(bencher: Bencher) {
             let key = public_key();
             let signature = base64_decode(SIGNATURE);
             signature::ED25519.verify_sig(&key, MESSAGE, &signature).unwrap();
-
-            bencher.bench_local(move || {
-                signature::ED25519.verify_sig(&key, MESSAGE, &signature)
-            });
-        }
-
-        #[divan::bench]
-        fn verify_fail(bencher: Bencher) {
-            let key = public_key();
-            let signature = base64_decode(&SIGNATURE.replace('w', "F"));
-            signature::ED25519.verify_sig(&key, MESSAGE, &signature).unwrap_err();
 
             bencher.bench_local(move || {
                 signature::ED25519.verify_sig(&key, MESSAGE, &signature)
