@@ -36,6 +36,7 @@ tracing-subscriber = "0.3.19"
 divan = "0.1.21"
 aws-lc-rs = "1.13.2"
 pem-rfc7468 = "0.7"
+ed25519-dalek = { version = "2.2.0", features = ["pem", "pkcs8"] }
 
 [[bench]]
 name = "crypto"

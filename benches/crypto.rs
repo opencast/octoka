@@ -250,6 +250,102 @@ mod es384 {
     }
 }
 
+mod ed25519 {
+    use super::*;
+
+    const MESSAGE: &[u8] = b"eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.\
+        eyJleHAiOjE3NjE4MzcyNDEsIm9jIjp7ImU6ZWI0ZjNiMTQtMzk1My00YzE3LTk1N2QtNmU0YzU4NjgyMDZiIjpbInJlYWQiXX19";
+    const SIGNATURE: &str = "b964mPGmN1nUm7cGp3Wz28uFaLtOLlSVFDYw0w74FHXJTUOvzs1L3wQMm79t25tWNKkNMw5oB8bAJXiS5wVTCg";
+    const PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\n\
+        MC4CAQAwBQYDK2VwBCIEINB9jZhRZppOcff2fcu821pa9VH0I4poMr6Ju3Pus/AL\n\
+        -----END PRIVATE KEY-----\n\
+    ";
+
+    mod dalek {
+        use super::*;
+        use ed25519_dalek::{SigningKey, Signature, pkcs8::DecodePrivateKey};
+
+        #[divan::bench]
+        fn verify_ok(bencher: Bencher) {
+            let key = key();
+            let signature = Signature::from_slice(&base64_decode(SIGNATURE)).unwrap();
+            key.verify(MESSAGE, &signature).unwrap();
+
+            bencher.bench_local(move || {
+                key.verify(MESSAGE, &signature)
+            });
+        }
+
+        #[divan::bench]
+        fn verify_fail(bencher: Bencher) {
+            let key = key();
+            let signature = Signature::from_slice(&base64_decode(&SIGNATURE.replace('w', "F"))).unwrap();
+            key.verify(MESSAGE, &signature).unwrap_err();
+
+            bencher.bench_local(move || {
+                key.verify(MESSAGE, &signature)
+            });
+        }
+
+        #[divan::bench]
+        fn sign(bencher: Bencher) {
+            let mut key = key();
+
+            bencher.bench_local(move || {
+                key.sign(MESSAGE)
+            });
+        }
+
+        fn key() -> SigningKey {
+            SigningKey::from_pkcs8_pem(PRIVATE_KEY).unwrap()
+        }
+    }
+
+    mod aws_lc {
+        use super::*;
+        use aws_lc_rs::signature::{self, Ed25519KeyPair, KeyPair, VerificationAlgorithm};
+
+        #[divan::bench]
+        fn verify_ok(bencher: Bencher) {
+            let key = public_key();
+            let signature = base64_decode(SIGNATURE);
+            signature::ED25519.verify_sig(&key, MESSAGE, &signature).unwrap();
+
+            bencher.bench_local(move || {
+                signature::ED25519.verify_sig(&key, MESSAGE, &signature)
+            });
+        }
+
+        #[divan::bench]
+        fn verify_fail(bencher: Bencher) {
+            let key = public_key();
+            let signature = base64_decode(&SIGNATURE.replace('w', "F"));
+            signature::ED25519.verify_sig(&key, MESSAGE, &signature).unwrap_err();
+
+            bencher.bench_local(move || {
+                signature::ED25519.verify_sig(&key, MESSAGE, &signature)
+            });
+        }
+
+        #[divan::bench]
+        fn sign(bencher: Bencher) {
+            let key = private_key();
+
+            bencher.bench_local(move || {
+                key.sign(MESSAGE)
+            });
+        }
+
+        fn private_key() -> Ed25519KeyPair {
+            let (_, pkcs8_bytes) = pem_rfc7468::decode_vec(PRIVATE_KEY.as_bytes()).unwrap();
+            Ed25519KeyPair::from_pkcs8(&pkcs8_bytes).unwrap()
+        }
+
+        fn public_key() -> Vec<u8> {
+            private_key().public_key().as_ref().to_vec()
+        }
+    }
+}
 
 
 fn base64_decode(s: &str) -> Vec<u8> {
