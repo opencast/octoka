@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 
 use bytes::Bytes;
-use elliptic_curve::JwkEcKey;
 use hyper::Uri;
 use serde::Deserialize;
 
@@ -42,9 +41,13 @@ pub(super) enum KeyData {
     #[serde(rename = "oct")]
     Oct,
 
-    // This is untagged as `JwkEcKey` requires reading the field `kty` itself.
-    #[serde(untagged)]
-    Ec(JwkEcKey),
+    // Elliptic curves
+    #[serde(rename = "EC")]
+    Ec {
+        crv: String,
+        x: String,
+        y: Option<String>,
+    },
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]
