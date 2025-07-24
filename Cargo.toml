@@ -43,3 +43,11 @@ pkcs8 = { version = "0.11.0-rc.6", features = ["pem"] }
 [[bench]]
 name = "crypto"
 harness = false
+
+
+[profile.release]
+debug = "line-tables-only"
+codegen-units = 1
+
+[profile.release.package."*"]
+debug = false
