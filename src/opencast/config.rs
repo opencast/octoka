@@ -3,7 +3,9 @@ use std::path::PathBuf;
 #[derive(Debug, confique::Config)]
 pub struct OpencastConfig {
     /// Path to the Opencast `downloads/` folder, e.g. `/mnt/opencast/downloads`.
-    pub downloads_path: PathBuf,
+    /// Settings this is required in some situations (e.g. if `http.serve_files`
+    /// is enabled).
+    pub downloads_path: Option<PathBuf>,
 
     /// List of possible path prefixes that should be handled by sfs. For most
     /// Opencast systems, the default is fine as all paths start with

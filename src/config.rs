@@ -18,6 +18,7 @@ pub fn template() -> String {
 }
 
 #[derive(Debug, confique::Config)]
+#[config(validate = Self::validate)]
 pub struct Config {
     #[config(nested)]
     pub opencast: OpencastConfig,
@@ -29,6 +30,14 @@ pub struct Config {
     pub http: HttpConfig,
 }
 
+impl Config {
+    fn validate(&self) -> Result<(), &'static str> {
+        if self.http.serve_files && self.opencast.downloads_path.is_none() {
+            return Err("`http.serve_files` is enabled, but `opencast.downloads_path` is not set");
+        }
+        Ok(())
+    }
+}
 
 
 

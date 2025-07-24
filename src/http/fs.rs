@@ -27,13 +27,15 @@ pub async fn serve_file(
         };
     }
 
+    // This is checked by `Config::validate`
+    let downloads_path = ctx.downloads_path.as_ref().expect("no downloads_path in serve_files");
 
     // Join, resolve and canonicalize path. Check for path traversal attacks.
     let fs_path = handle_io_err!(
-        ctx.downloads_path.join(path.without_prefix()).canonicalize(),
+        downloads_path.join(path.without_prefix()).canonicalize(),
         "canonicalizing path",
     );
-    let event_dir = ctx.downloads_path.join(path.rel_event_dir());
+    let event_dir = downloads_path.join(path.rel_event_dir());
     if !fs_path.starts_with(&event_dir) {
         warn!(path = path.full_path(), "Directory traversal attack detected, responding 400 Bad Request");
         return super::error_response(StatusCode::BAD_REQUEST);

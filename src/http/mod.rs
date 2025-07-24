@@ -180,7 +180,7 @@ fn error_response(status: StatusCode) -> Response {
 pub struct Context {
     pub config: Config,
     pub jwt: jwt::Context,
-    pub downloads_path: PathBuf,
+    pub downloads_path: Option<PathBuf>,
 }
 
 /// Main entry point: starting the HTTP server.
