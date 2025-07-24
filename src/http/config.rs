@@ -37,7 +37,10 @@ pub struct HttpConfig {
     /// Origins from which CORS requests are allowed. Web apps that load assets
     /// with the 'Authorization' header must be listed here. If empty, no CORS
     /// requests are allowed.
-    #[config(default = [])]
+    #[config(
+        default = [],
+        validate(crate::config::is_unique(cors_allowed_origins), "has duplicates"),
+    )]
     pub cors_allowed_origins: Vec<CorsOrigin>,
 
     /// The TCP port the HTTP server should listen on.
@@ -75,7 +78,7 @@ pub enum JwtSource {
     },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Deserialize)]
 #[serde(try_from = "String")]
 pub struct CorsOrigin(String);
 

@@ -40,8 +40,12 @@ pub fn validate_url_path(value: &String) -> Result<(), &'static str> {
     }
 }
 
+pub fn is_unique<T: std::hash::Hash + Eq>(list: &[T]) -> bool {
+    <std::collections::HashSet<_>>::from_iter(list).len() == list.len()
+}
+
 pub fn validate_unique<T: std::hash::Hash + Eq>(list: &[T]) -> Result<(), &'static str> {
-    if <std::collections::HashSet<_>>::from_iter(list).len() != list.len() {
+    if !is_unique(list) {
         return Err("duplicate entries");
     }
     Ok(())
