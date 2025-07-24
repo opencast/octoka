@@ -37,6 +37,8 @@ p256 = { version = "0.13.2", features = ["jwk"] }
 p384 = { version = "0.13.1", features = ["jwk"] }
 signature = "2.2.0"
 elliptic-curve = { version = "0.13.8", features = ["jwk"] }
+ed448-goldilocks = "0.14.0-pre.2"
+pkcs8 = { version = "0.11.0-rc.6", features = ["pem"] }
 
 [[bench]]
 name = "crypto"

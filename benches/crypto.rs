@@ -275,6 +275,51 @@ mod ed25519 {
     }
 }
 
+mod ed448 {
+    use super::*;
+
+    const MESSAGE: &[u8] = b"eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.\
+        eyJleHAiOjE3NjE4MzcyNDEsIm9jIjp7ImU6ZWI0ZjNiMTQtMzk1My00YzE3LTk1N2QtNmU0YzU4NjgyMDZiIjpbInJlYWQiXX19";
+    const SIGNATURE: &str = "7sH5xPxAvnkzwwLRBIrYRPtXwqoeoh8lRyPDd9KaQhWkYu8b2XP5v0Sgwne_ZDCI05GLXZjZ-veAkYPpby4ojjdiOzNzdPTNE9CqdOvBGTaBK7mJ0uo25liPfAwrrUVisyDF-lEwBBM5LPZWEzFueS4A";
+    const PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\n\
+        MEcCAQAwBQYDK2VxBDsEOYrsF28Jlv/NB2SCjTz0Ax578DThtcGskl01aPFyjIsQ\n\
+        yx0O34c/sstZ3SeqFbpP62izrpcSrMDXJA==\n\
+        -----END PRIVATE KEY-----\n\
+    ";
+
+    mod goldilocks {
+        use super::*;
+        use ed448_goldilocks::{SigningKey, Signature, signature::Signer};
+
+        #[divan::bench]
+        fn verify(bencher: Bencher) {
+            let key = key().verifying_key();
+            let signature = Signature::from_slice(&base64_decode(SIGNATURE)).unwrap();
+            key.verify_raw(&signature, MESSAGE).unwrap();
+
+            bencher.bench_local(move || {
+                key.verify_raw(&signature, MESSAGE)
+            });
+        }
+
+        #[divan::bench]
+        fn sign(bencher: Bencher) {
+            let key = key();
+
+            bencher.bench_local(move || {
+                key.sign(MESSAGE)
+            });
+        }
+
+        fn key() -> SigningKey {
+            // TODO: weird that we manually have to strip the PKCS8 header here.
+            // Don't use this code in production, it's just fine for benchmarking!
+            let (_, pkcs8_bytes) = pem_rfc7468::decode_vec(PRIVATE_KEY.as_bytes()).unwrap();
+            let info = pkcs8::PrivateKeyInfoRef::try_from(pkcs8_bytes.as_slice()).unwrap();
+            SigningKey::try_from(&info.private_key.as_bytes()[2..]).unwrap()
+        }
+    }
+}
 
 fn base64_decode(s: &str) -> Vec<u8> {
     use base64::Engine;
