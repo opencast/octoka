@@ -48,6 +48,13 @@ pub(super) enum KeyData {
         x: String,
         y: Option<String>,
     },
+
+    // EdDSA
+    #[serde(rename = "OKP")]
+    Okp {
+        crv: String,
+        x: String,
+    },
 }
 
 #[derive(Debug, Deserialize, PartialEq, Eq)]

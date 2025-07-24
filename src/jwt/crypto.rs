@@ -10,6 +10,7 @@ use super::{Context, decode::JwtError, jwks::{self, Jwk}};
 enum Algo {
     ES256,
     ES384,
+    EdDSA,
 }
 
 impl Algo {
@@ -17,6 +18,7 @@ impl Algo {
         match s {
             "ES256" => Some(Self::ES256),
             "ES384" => Some(Self::ES384),
+            "EdDSA" => Some(Self::EdDSA),
             _ => None,
         }
     }
@@ -34,11 +36,11 @@ pub(super) struct Key {
 impl Context {
     pub(super) async fn verify_signature(
         &self,
-        message: &str,
+        msg: &str,
         signature: &str,
         alg: &str,
     ) -> Result<(), JwtError> {
-        trace!(alg, message, signature, "Verifying signature...");
+        trace!(alg, msg, signature, "Verifying signature...");
         let algo = Algo::from_str(alg).ok_or(JwtError::UnsupportedAlg)?;
 
         self.refresh_keys_if_expired().await;
@@ -52,7 +54,7 @@ impl Context {
             }
 
             found_a_key = true;
-            match key.verify(message, &signature) {
+            match key.verify(msg, &signature) {
                 Ok(_) => {
                     trace!(?key, "Key successfully verified signature");
                     return Ok(());
@@ -122,7 +124,20 @@ impl Key {
                 })
             }
 
+            jwks::KeyData::Okp { crv, x } if crv == "Ed25519" => {
+                if jwk.alg.as_ref().is_some_and(|alg| alg != "EdDSA") {
+                    bail!("curve type Ed25519 does not match 'alg' field {:?}", jwk.alg);
+                }
+                let key_data = BASE64_URL_SAFE_NO_PAD.decode(x).context("invalid key")?;
+
+                Ok(Self {
+                    algo: Algo::EdDSA,
+                    key: UnparsedPublicKey::new(&aws_lc_rs::signature::ED25519, key_data),
+                })
+            }
+
             jwks::KeyData::Ec { crv, .. } => bail!("Curve type '{crv}' not supported"),
+            jwks::KeyData::Okp { crv, .. } => bail!("Curve type '{crv}' not supported"),
             jwks::KeyData::Oct => bail!("symmetric keys not supported"),
             jwks::KeyData::Rsa => bail!("RSA keys not supported"),
         }
