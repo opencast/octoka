@@ -9,7 +9,7 @@ mod crypto;
 mod decode;
 mod jwks;
 
-pub use self::config::{JwtConfig, JwtSource, JwksUrl};
+pub use self::config::{JwtConfig, JwksUrl};
 
 
 const BACKGROUND_REFRESH_LEAD_TIME: Duration = Duration::from_secs(3);

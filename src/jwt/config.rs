@@ -17,21 +17,6 @@ pub struct JwtConfig {
     #[config(validate = validate_trusted_keys)]
     pub trusted_keys: Vec<JwksUrl>,
 
-    /// Where to look for a JWT in the HTTP request. First source has highest
-    /// priority. Each array element is an object. Possible sources:
-    ///
-    /// - `{ source = "query", name = "jwt" }`: from URL query parameter "jwt".
-    ///   `name` can be chosen arbitrarily. The first parameter with that name
-    ///   is used.
-    /// - `{ source = "header", name = "Authorization", prefix = "Bearer " }`:
-    ///   from HTTP header with the given name. The optional `prefix` is
-    ///   stripped from the header value.
-    #[config(
-        default = [{ "source": "query", "name": "jwt" }],
-        validate(sources.len() > 0, "must not be empty"),
-    )]
-    pub sources: Vec<JwtSource>,
-
     /// Whether to regularly refetch `trusted_keys`. If `false`, they are
     /// refetched on-the-fly if stale when handling an incoming request, slowing
     /// down that request response.
@@ -47,18 +32,6 @@ pub struct JwtConfig {
     /// for possible clock skew.
     #[config(default = "3s", deserialize_with = crate::config::deserialize_duration)]
     pub allowed_clock_skew: Duration,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(tag = "source", rename_all = "snake_case")]
-pub enum JwtSource {
-    Query {
-        name: String,
-    },
-    Header {
-        name: String,
-        prefix: Option<String>,
-    },
 }
 
 impl JwtConfig {

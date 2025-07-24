@@ -2,17 +2,17 @@ use std::{borrow::Cow, convert::Infallible, error::Error, net::SocketAddr, panic
 
 use futures::FutureExt as _;
 use http_body_util::Full;
-use hyper::{body::{Bytes, Incoming}, header::{self, HeaderValue}, server::conn::http1, service::service_fn, HeaderMap, Method, Request, StatusCode, Uri};
+use hyper::{body::{Bytes, Incoming}, header::{self, HeaderValue}, server::conn::http1, service::service_fn, Method, Request, StatusCode};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
-use crate::{auth, config::Config, jwt::{self, JwtSource}, opencast::PathParts, prelude::*};
+use crate::{auth, config::Config, jwt, opencast::PathParts, prelude::*};
 
 mod config;
 mod fs;
 
 pub use self::{
-    config::HttpConfig,
+    config::{HttpConfig, JwtSource},
 };
 
 
@@ -46,15 +46,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
 
 
     // Find JWT in query parameter and/or header.
-    let jwt = ctx.config.jwt.sources.iter().find_map(|source| match source {
-        JwtSource::Query { name } => {
-            find_jwt_in_query(req.uri(), name)
-        }
-        JwtSource::Header { name, prefix } => {
-            find_jwt_in_header(req.headers(), name, prefix.as_deref())
-                .map(Cow::Borrowed)
-        }
-    });
+    let jwt = ctx.config.http.jwt_sources.iter().find_map(|source| source.extract(&req));
     let jwt = jwt.as_ref().map(|cow| cow.as_ref());
 
     // Perform auth check
@@ -146,38 +138,33 @@ fn add_cors_headers(
     ]);
 }
 
-/// Returns the value of the first query parameter with the given name.
-fn find_jwt_in_query<'uri>(
-    uri: &'uri Uri,
-    parameter_name: &str,
-) -> Option<Cow<'uri, str>> {
-    let raw_query = uri.query().unwrap_or("");
-    form_urlencoded::parse(raw_query.as_bytes())
-        .find(|(key, _)| key == parameter_name)
-        .map(|(_, value)| value)
-}
-
-/// Returns the first value of the given header, with `prefix` stripped. If the
-/// value is not valid UTF8, `None` is returned.
-fn find_jwt_in_header<'h>(
-    headers: &'h HeaderMap,
-    header_name: &str,
-    prefix: Option<&str>,
-) -> Option<&'h str> {
-    headers.get(header_name).and_then(|value| {
-        let bytes = value.as_bytes();
-        let stripped = match prefix {
-            Some(prefix) => bytes.strip_prefix(prefix.as_bytes()).unwrap_or(bytes),
-            None => bytes,
-        };
-        match str::from_utf8(stripped) {
-            Ok(s) => Some(s),
-            Err(_) => {
-                warn!(header_name, prefix, raw_header = bytes, "ignoring non-UTF8 header value");
-                None
-            }
+impl JwtSource {
+    /// Tries to extract a JWT from the given request according to `self`.
+    fn extract<'r>(&self, req: &'r Request<Incoming>) -> Option<Cow<'r, str>> {
+        match self {
+            JwtSource::Query { name } => {
+                let raw_query = req.uri().query().unwrap_or("");
+                form_urlencoded::parse(raw_query.as_bytes())
+                    .find(|(key, _)| key == name)
+                    .map(|(_, value)| value)
+            },
+            JwtSource::Header { name, prefix } => {
+                let value = req.headers().get(name)?;
+                let bytes = value.as_bytes();
+                let stripped = match prefix {
+                    Some(prefix) => bytes.strip_prefix(prefix.as_bytes()).unwrap_or(bytes),
+                    None => bytes,
+                };
+                match str::from_utf8(stripped) {
+                    Ok(s) => Some(s.into()),
+                    Err(_) => {
+                        warn!(name, prefix, raw_header = bytes, "ignoring non-UTF8 header value");
+                        None
+                    }
+                }
+            },
         }
-    })
+    }
 }
 
 

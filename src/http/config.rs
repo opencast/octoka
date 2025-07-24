@@ -19,6 +19,21 @@ pub struct HttpConfig {
     #[config(validate = crate::config::validate_url_path)]
     pub x_accel_redirect: Option<String>,
 
+    /// Where to look for a JWT in the HTTP request. First source has highest
+    /// priority. Each array element is an object. Possible sources:
+    ///
+    /// - `{ source = "query", name = "jwt" }`: from URL query parameter "jwt".
+    ///   `name` can be chosen arbitrarily. The first parameter with that name
+    ///   is used.
+    /// - `{ source = "header", name = "Authorization", prefix = "Bearer " }`:
+    ///   from first HTTP header with the given name. The optional `prefix` is
+    ///   stripped from the header value.
+    #[config(
+        default = [{ "source": "query", "name": "jwt" }],
+        validate(jwt_sources.len() > 0, "must not be empty"),
+    )]
+    pub jwt_sources: Vec<JwtSource>,
+
     /// Origins from which CORS requests are allowed. Web apps that load assets
     /// with the 'Authorization' header must be listed here. If empty, no CORS
     /// requests are allowed.
@@ -46,6 +61,18 @@ impl HttpConfig {
 
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "source", rename_all = "snake_case")]
+pub enum JwtSource {
+    Query {
+        name: String,
+    },
+    Header {
+        name: String,
+        prefix: Option<String>,
+    },
 }
 
 #[derive(Debug, Deserialize)]
