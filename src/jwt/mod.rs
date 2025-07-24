@@ -43,6 +43,7 @@ impl Context {
         let http_client = util::http_client()?;
         info!("Fetching trusted keys for initialization");
         let keys = Self::fetch_keys(&config.trusted_keys, &http_client).await;
+        info!("Fetched {} trusted keys", keys.keys.len());
         let keys = Arc::new(ArcSwap::from_pointee(keys));
 
         if config.background_key_refresh {
@@ -53,10 +54,7 @@ impl Context {
                 let sleep_time = config.key_cache_duration - BACKGROUND_REFRESH_LEAD_TIME;
                 loop {
                     tokio::time::sleep(sleep_time).await;
-
-                    debug!("Refreshing trusted keys");
-                    let new_keys = Self::fetch_keys(&config.trusted_keys, &http_client).await;
-                    keys.store(Arc::new(new_keys));
+                    Self::refresh_keys_impl(&keys, &http_client, &config).await;
                 }
             });
         }
@@ -68,12 +66,21 @@ impl Context {
         })
     }
 
+    pub async fn refresh_keys(&self) {
+        Self::refresh_keys_impl(&self.keys, &self.http_client, &self.config).await;
+    }
+
     /// Refreshes keys by refetching the JWKS URLs. In case of errors, warnings
     /// are logged, but old keys are invalidated in any case.
-    pub async fn refresh_keys(&self) {
+    async fn refresh_keys_impl(
+        keys: &ArcSwap<Keys>,
+        http_client: &SimpleHttpClient,
+        config: &JwtConfig,
+    ) {
         debug!("Refreshing trusted keys");
-        let keys = Self::fetch_keys(&self.config.trusted_keys, &self.http_client).await;
-        self.keys.store(Arc::new(keys));
+        let new_keys = Self::fetch_keys(&config.trusted_keys, http_client).await;
+        debug!("Fetched {} keys", new_keys.keys.len());
+        keys.store(Arc::new(new_keys));
     }
 
     pub async fn refresh_keys_if_expired(&self) {
@@ -88,7 +95,7 @@ impl Context {
         for url in urls {
             let url = &url.0;
             match jwks::fetch(url, http_client).await {
-                Err(e) => warn!(%url, "failed to fetch keys: {e}"),
+                Err(e) => warn!(%url, "failed to fetch keys: {e:#}"),
                 Ok(keys) => {
                     if keys.is_empty() {
                         warn!(%url, "JWKS URL had no valid keys");
