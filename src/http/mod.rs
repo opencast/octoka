@@ -18,6 +18,8 @@ pub use self::{
 
 const ALLOWED_METHODS: &str = "GET, OPTIONS";
 
+
+/// Main entry point for a single incoming request
 async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     trace!("incoming req: {} {}", req.method(), req.uri().path());
 

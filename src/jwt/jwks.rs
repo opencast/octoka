@@ -1,11 +1,10 @@
 use std::borrow::Cow;
 
 use bytes::Bytes;
-use hyper::Uri;
 use serde::Deserialize;
 
-use crate::{prelude::*, util::SimpleHttpClient};
-use super::crypto;
+use crate::{jwt::JwksUrl, prelude::*, util::SimpleHttpClient};
+use super::{crypto, Kid};
 
 
 /// A JSON Web Key Set, defined by RFC 7517 (see section 5 and 4). The following
@@ -22,6 +21,7 @@ pub struct Jwk<'a> {
     #[serde(rename = "use")]
     pub(super) use_: Option<KeyUsage>,
     pub(super) alg: Option<Cow<'a, str>>,
+    pub(super) kid: Option<Cow<'a, str>>,
 
     #[serde(flatten)]
     pub(super) key_data: KeyData,
@@ -65,12 +65,21 @@ pub(super) enum KeyUsage {
     Encryption,
 }
 
+pub(super) struct FetchedKey {
+    pub(super) key: crypto::Key,
+    pub(super) kid: Option<Kid>,
+}
+
+pub(super) struct FetchedData {
+    pub(super) keys: Vec<FetchedKey>,
+    // TODO: expiration
+}
 
 /// Fetches the given JWKS URL and returns valid keys that were found.
-pub async fn fetch(uri: &Uri, http_client: &SimpleHttpClient) -> Result<Vec<crypto::Key>> {
+pub async fn fetch(uri: &JwksUrl, http_client: &SimpleHttpClient) -> Result<FetchedData> {
     use http_body_util::BodyExt;
 
-    let response = http_client.get(uri.clone()).await
+    let response = http_client.get(uri.0.clone()).await
         .context("failed to fetch JWKS")?;
 
     if !response.status().is_success() {
@@ -88,11 +97,16 @@ pub async fn fetch(uri: &Uri, http_client: &SimpleHttpClient) -> Result<Vec<cryp
     // Read as crypto keys
     let mut keys = Vec::new();
     for jwk in jwks.keys {
-        match crypto::Key::from_jwk(jwk) {
+        match crypto::Key::from_jwk(&jwk) {
             Err(e) => debug!("key from JWKS invalid: {e}"),
-            Ok(key) => keys.push(key),
+            Ok(key) => {
+                keys.push(FetchedKey {
+                    key,
+                    kid: jwk.kid.map(|c| Kid(c.into_owned())),
+                });
+            }
         }
     }
 
-    Ok(keys)
+    Ok(FetchedData { keys })
 }

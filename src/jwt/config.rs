@@ -1,8 +1,8 @@
-use std::{net::IpAddr, time::Duration};
+use std::{fmt, net::IpAddr, time::Duration};
 
 use hyper::Uri;
 
-use super::BACKGROUND_REFRESH_LEAD_TIME;
+use super::keys::BACKGROUND_REFRESH_LEAD_TIME;
 
 
 #[derive(Debug, Clone, confique::Config)]
@@ -51,6 +51,12 @@ impl JwtConfig {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
 #[serde(try_from = "String")]
 pub struct JwksUrl(pub Uri);
+
+impl fmt::Display for JwksUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl TryFrom<String> for JwksUrl {
     type Error = String;

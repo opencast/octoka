@@ -2,19 +2,19 @@ use aws_lc_rs::{error::Unspecified, signature::UnparsedPublicKey};
 use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
 
 use crate::{jwt::jwks::KeyUsage, prelude::*};
-use super::{Context, decode::JwtError, jwks::{self, Jwk}};
+use super::{jwks::{self, Jwk}};
 
 
 /// Accepted signature algorithms
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Algo {
+pub(super) enum Algo {
     ES256,
     ES384,
     EdDSA,
 }
 
 impl Algo {
-    fn from_str(s: &str) -> Option<Self> {
+    pub(super) fn from_str(s: &str) -> Option<Self> {
         match s {
             "ES256" => Some(Self::ES256),
             "ES384" => Some(Self::ES384),
@@ -24,7 +24,7 @@ impl Algo {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct Key {
     /// The actual key. It is indeed just a wrapper for arbitrary bytes paired
     /// with an algorithm. No verification is done, which is unfortunate. See
@@ -33,53 +33,13 @@ pub(super) struct Key {
     algo: Algo,
 }
 
-impl Context {
-    pub(super) async fn verify_signature(
-        &self,
-        msg: &str,
-        signature: &str,
-        alg: &str,
-    ) -> Result<(), JwtError> {
-        trace!(alg, msg, signature, "Verifying signature...");
-        let algo = Algo::from_str(alg).ok_or(JwtError::UnsupportedAlg)?;
-
-        self.refresh_keys_if_expired().await;
-        let keys = self.keys.load();
-        let signature = super::decode::decode_base64(signature)?;
-        let mut found_a_key = false;
-        for key in &keys.keys {
-            if key.algo() != algo {
-                trace!(alg, ?key, "Key does not fit algo of JWT");
-                continue;
-            }
-
-            found_a_key = true;
-            match key.verify(msg, &signature) {
-                Ok(_) => {
-                    trace!(?key, "Key successfully verified signature");
-                    return Ok(());
-                }
-                Err(_) => trace!(?key, "Key could not verify signature"),
-            }
-        }
-
-        // TODO: refetch keys when no fitting one is found
-
-        if found_a_key {
-            Err(JwtError::InvalidSignature)
-        } else {
-            Err(JwtError::NoSuitableKey)
-        }
-    }
-}
-
 impl Key {
-    fn algo(&self) -> Algo {
+    pub(super) fn algo(&self) -> Algo {
         self.algo
     }
 
-    pub(super) fn from_jwk(jwk: Jwk<'_>) -> Result<Self> {
-        if jwk.use_.is_some_and(|usage| usage != KeyUsage::Signature) {
+    pub(super) fn from_jwk(jwk: &Jwk<'_>) -> Result<Self> {
+        if jwk.use_.as_ref().is_some_and(|usage| *usage != KeyUsage::Signature) {
             bail!("Field `use` of key is not 'sig'");
         }
 
@@ -90,7 +50,7 @@ impl Key {
             Ok(out)
         }
 
-        match jwk.key_data {
+        match &jwk.key_data {
             jwks::KeyData::Ec { crv, x, y } if crv == "P-256" => {
                 if jwk.alg.as_ref().is_some_and(|alg| alg != "ES256") {
                     bail!("curve type P-256 does not match 'alg' field {:?}", jwk.alg);
@@ -103,7 +63,7 @@ impl Key {
                     algo: Algo::ES256,
                     key: UnparsedPublicKey::new(
                         &aws_lc_rs::signature::ECDSA_P256_SHA256_FIXED,
-                        ecdsa_sec1_key(&x, &y).context("invalid key")?,
+                        ecdsa_sec1_key(x, y).context("invalid key")?,
                     ),
                 })
             }
@@ -119,7 +79,7 @@ impl Key {
                     algo: Algo::ES384,
                     key: UnparsedPublicKey::new(
                         &aws_lc_rs::signature::ECDSA_P384_SHA384_FIXED,
-                        ecdsa_sec1_key(&x, &y).context("invalid key")?,
+                        ecdsa_sec1_key(x, y).context("invalid key")?,
                     ),
                 })
             }
@@ -143,7 +103,7 @@ impl Key {
         }
     }
 
-    fn verify(&self, message: &str, signature: &[u8]) -> Result<(), Unspecified> {
+    pub(super) fn verify(&self, message: &str, signature: &[u8]) -> Result<(), Unspecified> {
         self.key.verify(message.as_bytes(), signature)
     }
 }

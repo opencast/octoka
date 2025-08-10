@@ -10,6 +10,7 @@ use super::{Context, TokenInfo};
 #[derive(Debug, Deserialize)]
 struct Header<'a> {
     alg: Cow<'a, str>,
+    kid: Option<Cow<'a, str>>,
     // We are not interested in any other fields, it's fine to ignore them.
 }
 
@@ -45,7 +46,7 @@ impl Context {
             .map_err(|_| JwtError::InvalidJson)?;
 
         // Verify signature
-        self.verify_signature(message, signature, &header.alg).await?;
+        self.verify_signature(message, signature, &header.alg, header.kid.as_deref()).await?;
 
         // Decode and deserialize payload
         let payload = decode_base64(payload)?;
@@ -138,6 +139,9 @@ pub enum JwtError {
 
     /// The token has expired according to the `exp` claim.
     Expired,
+
+    /// The key's algorithm does not match the JWT's algorithm.
+    AlgoMismatch,
 
     /// The token is not valid yet according to the `nbf` claim.
     NotValidYet,
