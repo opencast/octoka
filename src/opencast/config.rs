@@ -7,8 +7,8 @@ pub struct OpencastConfig {
     /// is enabled).
     pub downloads_path: Option<PathBuf>,
 
-    /// List of possible path prefixes that should be handled by sfs. For most
-    /// Opencast systems, the default is fine as all paths start with
+    /// List of possible path prefixes that should be handled by octoka. For
+    /// most Opencast systems, the default is fine as all paths start with
     /// `/static/...`.
     ///
     /// This corresponds to `org.opencastproject.download.url` in `custom.properties`

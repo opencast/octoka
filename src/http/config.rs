@@ -6,7 +6,7 @@ use serde::Deserialize;
 #[derive(Debug, confique::Config)]
 #[config(validate = Self::validate)]
 pub struct HttpConfig {
-    /// Whether files are directly served, making sfs operate as fully
+    /// Whether files are directly served, making octoka operate as fully
     /// functional file server. If `false`, all HTTP responses have an empty
     /// body and a separate HTTP server needs to perform the actual file
     /// serving. It can be used to implement "auth sub-requests", for example.
