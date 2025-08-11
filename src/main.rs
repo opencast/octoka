@@ -6,13 +6,14 @@ use std::{
 
 use clap::Parser as _;
 
-use crate::prelude::*;
+use crate::{config::Config, prelude::*};
 
 
 mod auth;
 mod config;
 mod http;
 mod jwt;
+mod log;
 mod opencast;
 mod prelude;
 mod util;
@@ -20,7 +21,6 @@ mod util;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    tracing_subscriber::fmt::init();
 
     let cli = Cli::parse();
     match cli.cmd {
@@ -37,10 +37,7 @@ async fn main() -> Result<()> {
         }
 
         Command::Run => {
-            let config = match cli.config {
-                None => config::load()?,
-                Some(path) => config::load_from(path)?,
-            };
+            let config = load_config_and_init_logger(&cli)?;
             let ctx = http::Context {
                 jwt: jwt::Context::new(&config.jwt).await?,
                 config,
@@ -50,6 +47,18 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn load_config_and_init_logger(cli: &Cli) -> Result<Config> {
+    let config = match &cli.config {
+        None => config::load()?,
+        Some(path) => config::load_from(path)?,
+    };
+    log::init(&config.log).context("failed to setup logger")?;
+    info!("Loaded config");
+    info!("Initialized logger");
+    trace!("Configuration: {config:#?}");
+    Ok(config)
 }
 
 #[derive(clap::Parser)]

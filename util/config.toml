@@ -17,3 +17,6 @@ trusted_keys = [
 #serve_files = true
 #x_accel_redirect =
 cors_allowed_origins = ["http://localhost:8030"]
+
+[log]
+filters.octoka = "trace"

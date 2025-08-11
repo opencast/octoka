@@ -48,13 +48,18 @@ impl JwtConfig {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, serde::Deserialize)]
 #[serde(try_from = "String")]
 pub struct JwksUrl(pub Uri);
 
 impl fmt::Display for JwksUrl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+impl fmt::Debug for JwksUrl {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.to_string().fmt(f)
     }
 }
 

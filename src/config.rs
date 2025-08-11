@@ -6,7 +6,13 @@ use confique::{
     serde::{self, Deserialize as _},
 };
 
-use crate::{http::HttpConfig, jwt::JwtConfig, opencast::OpencastConfig, prelude::*};
+use crate::{
+    http::HttpConfig,
+    jwt::JwtConfig,
+    log::LogConfig,
+    opencast::OpencastConfig,
+    prelude::*,
+};
 
 
 /// Paths that are checked for a config file.
@@ -69,6 +75,9 @@ pub struct Config {
 
     #[config(nested)]
     pub http: HttpConfig,
+
+    #[config(nested)]
+    pub log: LogConfig,
 }
 
 impl Config {
