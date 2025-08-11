@@ -37,7 +37,10 @@ async fn main() -> Result<()> {
         }
 
         Command::Run => {
-            let config = config::load()?;
+            let config = match cli.config {
+                None => config::load()?,
+                Some(path) => config::load_from(path)?,
+            };
             let downloads_path = config.opencast.downloads_path.as_ref().map(|path| {
                 path.canonicalize().context("could not canonicalize `opencast.downloads_path`")
             }).transpose()?;
@@ -57,11 +60,16 @@ async fn main() -> Result<()> {
 #[command(version, about)]
 struct Cli {
     #[clap(subcommand)]
-    pub(crate) cmd: Command,
+    cmd: Command,
+
+    /// Specifies config file location. Default locations are: 'config.toml' and
+    /// '/etc/octoka/config.toml'. Can also be set via env `OCTOKA_CONFIG_PATH`.
+    #[clap(long)]
+    config: Option<PathBuf>,
 }
 
 #[derive(Debug, clap::Parser)]
-pub(crate) enum Command {
+enum Command {
     /// Starts the HTTP server.
     Run,
 
