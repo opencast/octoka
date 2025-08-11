@@ -62,7 +62,7 @@ pub async fn serve_file(
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::LAST_MODIFIED, httpdate::fmt_http_date(mtime))
         .header(header::ETAG, &etag);
-    add_cors_headers(&req, &mut response, &ctx.config.http);
+    add_cors_headers(req, &mut response, &ctx.config.http);
     if let Some(mime) = mime_guess::from_path(&fs_path).first() {
         response = response.header("Content-Type", mime.to_string());
     }

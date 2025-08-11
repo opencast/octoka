@@ -87,7 +87,7 @@ where
         return Ok(Duration::ZERO);
     }
 
-    let start_unit = s.find(|c: char| !c.is_digit(10))
+    let start_unit = s.find(|c: char| !c.is_ascii_digit())
         .ok_or_else(|| D::Error::custom("no time unit for duration"))?;
     let (num, unit) = s.split_at(start_unit);
     let num: u32 = num.parse()

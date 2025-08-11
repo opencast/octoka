@@ -112,7 +112,7 @@ impl Context {
 
         // Next: if we found any stale sources, we refresh them and try those
         // keys now.
-        if stale_sources.len() > 0 {
+        if !stale_sources.is_empty() {
             // Refresh stale sources/keys
             self.key_manager
                 .refresh(stale_sources.iter().copied())

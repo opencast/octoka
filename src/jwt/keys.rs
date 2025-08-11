@@ -94,10 +94,8 @@ impl Keys {
     ) -> Result<impl Iterator<Item = (&Key, bool)>, JwtError> {
         let perfect_match = kid.and_then(|kid| self.with_id.get(kid));
 
-        if let Some(key) = perfect_match {
-            if key.key.algo() != alg {
-                return Err(JwtError::AlgoMismatch);
-            }
+        if let Some(key) = perfect_match && key.key.algo() != alg {
+            return Err(JwtError::AlgoMismatch);
         }
 
         let without_ids = perfect_match.is_none().then(|| self.without_id.iter());
@@ -205,7 +203,7 @@ impl KeyManager {
             Ok(_permit) => {
                 let res = jwks::fetch(source, &self.http_client).await;
                 self.keys.rcu(|keys| {
-                    let mut out = Keys::clone(&keys);
+                    let mut out = Keys::clone(keys);
                     match &res {
                         Ok(data) => {
                             trace!(%source, num_keys = data.keys.len(), "done fetching keys");
@@ -300,7 +298,7 @@ impl KeyManager {
             // Find source that is expiring next.
             let keys = self.keys.load();
             let next_expiry = keys.sources.iter()
-                .map(|src| src.expiry(&config))
+                .map(|src| src.expiry(config))
                 .min()
                 .expect("no key sources in BG refresh");
             drop(keys);
@@ -318,7 +316,7 @@ impl KeyManager {
                 - BACKGROUND_REFRESH_LEAD_TIME
                 - Duration::from_millis(500);
             let to_be_refreshed = keys.sources.iter()
-                .filter(|src| src.expiry(&config) > threshold)
+                .filter(|src| src.expiry(config) > threshold)
                 .map(|src| &src.url);
 
             debug!("background-refreshing some keys");

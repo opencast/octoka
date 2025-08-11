@@ -30,7 +30,7 @@ pub struct HttpConfig {
     ///   stripped from the header value.
     #[config(
         default = [{ "source": "query", "name": "jwt" }],
-        validate(jwt_sources.len() > 0, "must not be empty"),
+        validate(!jwt_sources.is_empty(), "must not be empty"),
     )]
     pub jwt_sources: Vec<JwtSource>,
 
@@ -105,6 +105,6 @@ impl TryFrom<String> for CorsOrigin {
             return Err("origin must not contain path, query, fragment or user path");
         }
 
-        Ok(Self(s.into()))
+        Ok(Self(s))
     }
 }

@@ -31,7 +31,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     trace!("incoming req: {} {}", req.method(), req.uri().path());
 
     // Handle OPTIONS requests
-    if req.method() == &Method::OPTIONS {
+    if req.method() == Method::OPTIONS {
         let mut builder = Response::builder()
             .status(StatusCode::NO_CONTENT)
             .header(header::ALLOW, ALLOWED_METHODS);
@@ -41,7 +41,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
         return builder.body(Body::Empty).unwrap();
     }
 
-    if req.method() != &Method::GET {
+    if req.method() != Method::GET {
         return error_response(StatusCode::METHOD_NOT_ALLOWED);
     }
 
@@ -109,7 +109,7 @@ fn add_cors_headers(
         }
     };
 
-    if req.method() == &Method::OPTIONS {
+    if req.method() == Method::OPTIONS {
         // Only allow 'Authorization' header.
         match req.headers().get(header::ACCESS_CONTROL_REQUEST_HEADERS) {
             Some(h) if h.as_bytes()
@@ -275,7 +275,7 @@ async fn handle_internal_errors(
             // `panic!` like `println!`), this is either `&str` or `String`.
             let msg = panic.downcast_ref::<String>()
                 .map(|s| s.as_str())
-                .or(panic.downcast_ref::<&str>().map(|s| *s));
+                .or(panic.downcast_ref::<&str>().copied());
 
             // TODO: It would be great to also log everything the panic hook
             // would print, namely: location information and a backtrace. Do we
@@ -356,8 +356,8 @@ impl hyper::body::Body for Body {
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Option<std::result::Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
         match *self {
-            Self::Empty => return Poll::Ready(None),
-            Self::Tiny(ref mut inner) => return Pin::new(inner).poll_frame(cx)
+            Self::Empty => Poll::Ready(None),
+            Self::Tiny(ref mut inner) => Pin::new(inner).poll_frame(cx)
                 .map_err(|never| match never {}),
             Self::File(ref mut file) => Pin::new(file).poll_frame(cx),
         }
