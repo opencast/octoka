@@ -41,8 +41,10 @@ pub fn load() -> Result<Config, Error> {
 
 pub fn load_from(path: impl AsRef<Path>) -> Result<Config, Error> {
     let path = path.as_ref();
-    Config::from_file(path)
-        .with_context(|| format!("failed to load config file '{}", path.display()))
+    let mut config = Config::from_file(path)
+        .with_context(|| format!("failed to load config file '{}", path.display()))?;
+    config.fix_paths(path)?;
+    Ok(config)
 }
 
 pub fn template() -> String {
@@ -51,6 +53,11 @@ pub fn template() -> String {
     confique::toml::template::<Config>(options)
 }
 
+/// Configuration for octoka.
+///
+/// All relative paths are relative to the location of this configuration file.
+/// Duration values are specified as string with a unit, e.g. "27s". Valid
+/// units: 'ms', 's', 'min', 'h' and 'd'.
 #[derive(Debug, confique::Config)]
 #[config(validate = Self::validate)]
 pub struct Config {
@@ -69,6 +76,22 @@ impl Config {
         if self.http.serve_files && self.opencast.downloads_path.is_none() {
             return Err("`http.serve_files` is enabled, but `opencast.downloads_path` is not set");
         }
+        Ok(())
+    }
+
+    pub(crate) fn fix_paths(&mut self, config_path: &Path) -> Result<()> {
+        let absolute_config_path = config_path.canonicalize()
+            .context("failed to canonicalize config path")?;
+        let base_path = absolute_config_path.parent()
+            .expect("config file path has no parent");
+
+        if let Some(path) = &mut self.opencast.downloads_path {
+            if path.is_relative() {
+                *path = base_path.join(&path);
+            }
+            *path = path.canonicalize().context("could not canonicalize `opencast.downloads_path`")?;
+        }
+
         Ok(())
     }
 }

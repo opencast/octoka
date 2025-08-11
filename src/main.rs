@@ -41,13 +41,9 @@ async fn main() -> Result<()> {
                 None => config::load()?,
                 Some(path) => config::load_from(path)?,
             };
-            let downloads_path = config.opencast.downloads_path.as_ref().map(|path| {
-                path.canonicalize().context("could not canonicalize `opencast.downloads_path`")
-            }).transpose()?;
             let ctx = http::Context {
                 jwt: jwt::Context::new(&config.jwt).await?,
                 config,
-                downloads_path,
             };
             http::serve(ctx).await?;
         }

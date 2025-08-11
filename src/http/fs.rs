@@ -28,7 +28,8 @@ pub async fn serve_file(
     }
 
     // This is checked by `Config::validate`
-    let downloads_path = ctx.downloads_path.as_ref().expect("no downloads_path in serve_files");
+    let downloads_path = ctx.config.opencast.downloads_path.as_ref()
+        .expect("no downloads_path in serve_files");
 
     // Join, resolve and canonicalize path. Check for path traversal attacks.
     let fs_path = handle_io_err!(

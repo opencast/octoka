@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow, convert::Infallible, error::Error, net::SocketAddr, panic::AssertUnwindSafe,
-    path::PathBuf, pin::Pin, sync::Arc, task::Poll,
+    pin::Pin, sync::Arc, task::Poll,
 };
 
 use futures::FutureExt as _;
@@ -189,7 +189,6 @@ fn error_response(status: StatusCode) -> Response {
 pub struct Context {
     pub config: Config,
     pub jwt: jwt::Context,
-    pub downloads_path: Option<PathBuf>,
 }
 
 /// Main entry point: starting the HTTP server.
