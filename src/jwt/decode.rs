@@ -2,8 +2,8 @@ use std::{borrow::Cow, collections::HashMap, time::SystemTime};
 
 use serde::Deserialize;
 
-use crate::prelude::*;
 use super::{Context, TokenInfo};
+use crate::prelude::*;
 
 
 
@@ -96,7 +96,7 @@ impl TokenInfo {
                         readable_events.push(id.to_owned());
                     }
                 }
-                "s" | "p" => {}, // Ignore
+                "s" | "p" => {} // Ignore
                 _ => {
                     debug!("`oc` claim contained unknown item kind: '{prefix}'");
                 }
@@ -112,7 +112,8 @@ impl TokenInfo {
 
 pub(super) fn decode_base64(base64: &str) -> Result<Vec<u8>, JwtError> {
     use base64::Engine;
-    base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(base64)
+    base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(base64)
         .map_err(|_| JwtError::InvalidJwt)
 }
 

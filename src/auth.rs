@@ -17,7 +17,7 @@ pub async fn is_allowed(
         Err(e) => {
             debug!("rejected JWT ({e:?}) -> denying access");
             return false;
-        },
+        }
     };
 
     if info.is_admin {
@@ -25,7 +25,7 @@ pub async fn is_allowed(
         return true;
     }
     if info.readable_events.iter().any(|e| e == path.event_id()) {
-        trace!(event = path.event_id(), "JWT grants read access to event -> allowing acces");
+        trace!(event = path.event_id(), "JWT grants read access to event -> allowing access");
         return true;
     }
 

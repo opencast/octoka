@@ -5,11 +5,11 @@ use futures::TryStreamExt as _;
 use http::Request;
 use http_body_util::combinators::BoxBody;
 use http_range::{HttpRange, HttpRangeParseError};
-use hyper::{body::Incoming, header, HeaderMap, StatusCode};
+use hyper::{HeaderMap, StatusCode, body::Incoming, header};
 use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncSeekExt as _};
 
-use crate::{http::add_cors_headers, opencast::PathParts, prelude::*};
 use super::{Body, Context, Response};
+use crate::{http::add_cors_headers, opencast::PathParts, prelude::*};
 
 
 /// Serves the file referred to by `path` directly from the file system.
@@ -37,7 +37,10 @@ pub async fn serve_file(
     );
     let event_dir = downloads_path.join(path.rel_event_dir());
     if !fs_path.starts_with(&event_dir) {
-        warn!(path = path.full_path(), "Directory traversal attack detected, responding 400 Bad Request");
+        warn!(
+            path = path.full_path(),
+            "Directory traversal attack detected, responding 400 Bad Request",
+        );
         return super::error_response(StatusCode::BAD_REQUEST);
     }
 
@@ -90,7 +93,10 @@ pub async fn serve_file(
             }
         };
 
-        handle_io_err!(file.seek(std::io::SeekFrom::Start(range.start)).await, "seeking in file");
+        handle_io_err!(
+            file.seek(std::io::SeekFrom::Start(range.start)).await,
+            "seeking in file"
+        );
         response = response
             .status(StatusCode::PARTIAL_CONTENT)
             .header(header::CONTENT_LENGTH, range.length)

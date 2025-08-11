@@ -1,8 +1,8 @@
 use aws_lc_rs::{error::Unspecified, signature::UnparsedPublicKey};
-use base64::{prelude::BASE64_URL_SAFE_NO_PAD, Engine};
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 
+use super::jwks::{self, Jwk};
 use crate::{jwt::jwks::KeyUsage, prelude::*};
-use super::{jwks::{self, Jwk}};
 
 
 /// Accepted signature algorithms

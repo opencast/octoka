@@ -1,6 +1,10 @@
 use std::time::Duration;
+
 use anyhow::{Context as _, Error};
-use confique::{serde::{self, Deserialize as _}, Config as _};
+use confique::{
+    Config as _,
+    serde::{self, Deserialize as _},
+};
 
 use crate::{http::HttpConfig, jwt::JwtConfig, opencast::OpencastConfig};
 
@@ -71,7 +75,8 @@ pub fn validate_not_empty<T>(list: &[T]) -> Result<(), &'static str> {
 /// Custom format for durations. We allow a couple useful units and required
 /// a unit to increase readability of config files.
 pub fn deserialize_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
-    where D: serde::Deserializer<'de>,
+where
+    D: serde::Deserializer<'de>,
 {
     use serde::de::Error;
 

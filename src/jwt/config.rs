@@ -67,8 +67,9 @@ impl TryFrom<String> for JwksUrl {
         // Must have host (and optional port), but no user information.
         match uri.authority() {
             None => return Err("must have authority part".into()),
-            Some(authority) if authority.as_str().contains('@')
-                => return Err("must not contain user part".into()),
+            Some(authority) if authority.as_str().contains('@') => {
+                return Err("must not contain user part".into());
+            }
             _ => {}
         }
 

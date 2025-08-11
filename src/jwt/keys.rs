@@ -4,10 +4,16 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
 use futures::future::join_all;
-use tokio::{sync::{RwLock, Semaphore, TryAcquireError}, time::Instant};
+use tokio::{
+    sync::{RwLock, Semaphore, TryAcquireError},
+    time::Instant,
+};
 
-use crate::{prelude::*, util::{self, SimpleHttpClient}};
-use super::{crypto, jwks, decode::JwtError, Kid, JwksUrl, JwtConfig};
+use super::{JwksUrl, JwtConfig, Kid, crypto, decode::JwtError, jwks};
+use crate::{
+    prelude::*,
+    util::{self, SimpleHttpClient},
+};
 
 
 /// How much before the expiration time of keys are we refetching them?
@@ -219,7 +225,7 @@ impl KeyManager {
                     }
                     out
                 });
-            },
+            }
 
             // If there are currently not permits, that means another task is
             // currently fetching this URL. In that case we do nothing, except
@@ -229,7 +235,7 @@ impl KeyManager {
             Err(TryAcquireError::NoPermits) => {
                 trace!(%source, "waiting for already running refresh task");
                 let _ = semaphore.acquire().await;
-            },
+            }
 
             Err(TryAcquireError::Closed) => unreachable!("semaphore is closed for: {source}"),
         }
@@ -285,7 +291,7 @@ impl KeyManager {
             Err(_) => {
                 let _ = self.last_backup_refresh.read().await;
                 true
-            },
+            }
         }
     }
 

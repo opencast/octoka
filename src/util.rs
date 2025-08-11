@@ -1,5 +1,5 @@
 use hyper_rustls::{HttpsConnector, HttpsConnectorBuilder};
-use hyper_util::client::legacy::{connect::HttpConnector, Client as HyperClient};
+use hyper_util::client::legacy::{Client as HyperClient, connect::HttpConnector};
 
 use crate::prelude::*;
 

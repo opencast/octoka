@@ -1,8 +1,17 @@
-use std::{borrow::Cow, convert::Infallible, error::Error, net::SocketAddr, panic::AssertUnwindSafe, path::PathBuf, pin::Pin, sync::Arc, task::Poll};
+use std::{
+    borrow::Cow, convert::Infallible, error::Error, net::SocketAddr, panic::AssertUnwindSafe,
+    path::PathBuf, pin::Pin, sync::Arc, task::Poll,
+};
 
 use futures::FutureExt as _;
 use http_body_util::Full;
-use hyper::{body::{Bytes, Incoming}, header::{self, HeaderValue}, server::conn::http1, service::service_fn, Method, Request, StatusCode};
+use hyper::{
+    Method, Request, StatusCode,
+    body::{Bytes, Incoming},
+    header::{self, HeaderValue},
+    server::conn::http1,
+    service::service_fn,
+};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
@@ -11,9 +20,7 @@ use crate::{auth, config::Config, jwt, opencast::PathParts, prelude::*};
 mod config;
 mod fs;
 
-pub use self::{
-    config::{HttpConfig, JwtSource},
-};
+pub use self::config::{HttpConfig, JwtSource};
 
 
 const ALLOWED_METHODS: &str = "GET, OPTIONS";
@@ -149,7 +156,7 @@ impl JwtSource {
                 form_urlencoded::parse(raw_query.as_bytes())
                     .find(|(key, _)| key == name)
                     .map(|(_, value)| value)
-            },
+            }
             JwtSource::Header { name, prefix } => {
                 let value = req.headers().get(name)?;
                 let bytes = value.as_bytes();
@@ -302,7 +309,7 @@ fn log_hyper_error(err: hyper::Error) {
         match io.kind() {
             std::io::ErrorKind::ConnectionReset => false,
             std::io::ErrorKind::NotConnected => false,
-            _ => true
+            _ => true,
         }
     } else {
         err.is_timeout() || err.is_user() || err.is_closed() || err.is_canceled()

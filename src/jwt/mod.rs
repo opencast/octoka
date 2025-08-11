@@ -2,7 +2,13 @@ use std::{borrow::Borrow, collections::HashSet, sync::Arc};
 
 use arc_swap::ArcSwap;
 
-use crate::{jwt::{decode::JwtError, keys::{Keys, KeyManager}}, prelude::*};
+use crate::{
+    jwt::{
+        decode::JwtError,
+        keys::{KeyManager, Keys},
+    },
+    prelude::*,
+};
 
 mod config;
 mod crypto;
@@ -10,7 +16,7 @@ mod decode;
 mod jwks;
 mod keys;
 
-pub use self::config::{JwtConfig, JwksUrl};
+pub use self::config::{JwksUrl, JwtConfig};
 
 
 /// Processed information from a JWT relevant for authorization.
@@ -79,7 +85,7 @@ impl Context {
                 match key.verify(msg, &signature) {
                     Ok(()) => {
                         trace!(?key, "Key successfully verified signature");
-                        return Ok(())
+                        return Ok(());
                     }
                     Err(_) => {
                         trace!(?key, "Key could not verify signature");
@@ -108,7 +114,9 @@ impl Context {
         // keys now.
         if stale_sources.len() > 0 {
             // Refresh stale sources/keys
-            self.key_manager.refresh(stale_sources.iter().copied()).await;
+            self.key_manager
+                .refresh(stale_sources.iter().copied())
+                .await;
 
             // Try all keys that were just refreshed
             let keys = self.keys().load();
@@ -127,7 +135,10 @@ impl Context {
         if stale_sources.len() == self.config.trusted_keys.len() {
             trace!("Already just refetched all sources -> no backup refetch");
         } else {
-            let not_refreshed_yet = self.config.trusted_keys.iter()
+            let not_refreshed_yet = self
+                .config
+                .trusted_keys
+                .iter()
                 .filter(|url| !stale_sources.contains(url));
             let try_again = self.key_manager.backup_refresh(not_refreshed_yet).await;
 

@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use bytes::Bytes;
 use serde::Deserialize;
 
+use super::{Kid, crypto};
 use crate::{jwt::JwksUrl, prelude::*, util::SimpleHttpClient};
-use super::{crypto, Kid};
 
 
 /// A JSON Web Key Set, defined by RFC 7517 (see section 5 and 4). The following
