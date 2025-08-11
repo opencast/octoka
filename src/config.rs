@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{path::{Path, PathBuf}, time::Duration};
 
 use anyhow::{Context as _, Error};
 use confique::{
@@ -6,13 +6,43 @@ use confique::{
     serde::{self, Deserialize as _},
 };
 
-use crate::{http::HttpConfig, jwt::JwtConfig, opencast::OpencastConfig};
+use crate::{http::HttpConfig, jwt::JwtConfig, opencast::OpencastConfig, prelude::*};
 
+
+/// Paths that are checked for a config file.
+const DEFAULT_PATHS: &[&str] = &[
+    // For better DX, we include this special path here, but just in debug mode.
+    #[cfg(debug_assertions)]
+    "util/config.toml",
+
+    "config.toml",
+    "/etc/octoka/config.toml",
+];
+
+/// Env var that can be used to set the config path.
+const CONFIG_PATH_ENV: &str = "OCTOKA_CONFIG_PATH";
 
 
 pub fn load() -> Result<Config, Error> {
-    Config::from_file("config.toml")
-        .context("failed to load config file")
+    let path = if let Some(path) = std::env::var_os(CONFIG_PATH_ENV) {
+        PathBuf::from(path)
+    } else {
+        DEFAULT_PATHS.iter()
+            .map(PathBuf::from)
+            .find(|p| p.exists())
+            .ok_or(anyhow!(
+                "no configuration file found at any of the following locations: {}",
+                DEFAULT_PATHS.join(", "),
+            ))?
+    };
+
+    load_from(path)
+}
+
+pub fn load_from(path: impl AsRef<Path>) -> Result<Config, Error> {
+    let path = path.as_ref();
+    Config::from_file(path)
+        .with_context(|| format!("failed to load config file '{}", path.display()))
 }
 
 pub fn template() -> String {
