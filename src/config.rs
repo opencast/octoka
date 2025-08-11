@@ -1,6 +1,6 @@
 use std::{path::{Path, PathBuf}, time::Duration};
 
-use anyhow::{Context as _, Error};
+use anyhow::{ensure, Context as _, Error};
 use confique::{
     Config as _,
     serde::{self, Deserialize as _},
@@ -98,7 +98,9 @@ impl Config {
             if path.is_relative() {
                 *path = base_path.join(&path);
             }
-            *path = path.canonicalize().context("could not canonicalize `opencast.downloads_path`")?;
+            *path = path.canonicalize()
+                .context("could not canonicalize `opencast.downloads_path`")?;
+            ensure!(path.is_dir(), "`opencast.downloads_psth` is not a directory");
         }
 
         Ok(())

@@ -161,3 +161,13 @@ impl Context {
         }
     }
 }
+
+pub(crate) async fn run_check(config: &JwtConfig) -> Vec<(&JwksUrl, Result<()>)> {
+    let http_client = crate::util::http_client().expect("failed to create HTTP client");
+    let mut out = Vec::new();
+    for url in &config.trusted_keys {
+        out.push((url, jwks::fetch(url, &http_client).await.map(|_| ())));
+    }
+
+    out
+}

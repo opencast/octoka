@@ -21,11 +21,10 @@ mod util;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-
     let cli = Cli::parse();
     match cli.cmd {
         Command::Check => {
-            todo!()
+            run_check(&cli).await?;
         }
 
         Command::GenConfigTemplate { out } => {
@@ -89,4 +88,31 @@ enum Command {
         #[clap(short, long)]
         out: Option<PathBuf>,
     },
+}
+
+async fn run_check(cli: &Cli) -> Result<()> {
+    let config = load_config_and_init_logger(cli)
+        .context("failed to load config: cannot proceed with `check` command")?;
+
+
+    fn print_outcome<T>(label: &str, res: Result<T>) {
+        match res {
+            Ok(_) => println!(" ▸ {label}: ✔ ok"),
+            Err(e) => {
+                println!(" ▸ {label}: ✘ error");
+                println!("    {e:#}");
+            }
+        }
+    }
+
+    let jwks_checks = jwt::run_check(&config.jwt).await;
+
+    println!();
+    println!();
+    print_outcome("Configuration", Ok(()));
+    for (url, outcome) in jwks_checks {
+        print_outcome(&format!("Fetch '{url}'"), outcome);
+    }
+
+    Ok(())
 }
