@@ -28,9 +28,9 @@ async fn main() -> Result<()> {
             todo!()
         }
 
-        Command::GenConfigTemplate { target } => {
+        Command::GenConfigTemplate { out } => {
             let template = config::template();
-            match target {
+            match out {
                 Some(path) => fs::write(path, &template)?,
                 None => io::stdout().write_all(template.as_bytes())?,
             }
@@ -73,6 +73,7 @@ pub(crate) enum Command {
     /// with descriptions, great as a starting point.
     GenConfigTemplate {
         /// File to write it to. If unspecified, written to stdout.
-        target: Option<PathBuf>,
+        #[clap(short, long)]
+        out: Option<PathBuf>,
     },
 }
