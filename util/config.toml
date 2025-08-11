@@ -1,0 +1,19 @@
+[opencast]
+downloads_path = "test-downloads/"
+# downloads_path = "../../opencast/build/opencast-dist-develop-17-SNAPSHOT/data/opencast/downloads/"
+#path_prefixes = ["/static"]
+
+
+[jwt]
+trusted_keys = [
+    "https://explore.opencast.org/.well-known/jwks.json",
+    "http://localhost:3080/.well-known/jwks.json",
+]
+#background_key_refresh = true
+#key_cache_duration = "10min"
+
+
+[http]
+#serve_files = true
+#x_accel_redirect =
+cors_allowed_origins = ["http://localhost:8030"]
