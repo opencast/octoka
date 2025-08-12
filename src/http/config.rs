@@ -13,9 +13,10 @@ pub struct HttpConfig {
     #[config(default = true)]
     pub serve_files: bool,
 
-    /// If set, HTTP responses will have the header `X-Accel-Redirect` set to
-    /// the specified string joined with the path stripped of the prefix (see
-    /// `opencast.path_prefixes`. Example: "/protected".
+    /// If set, HTTP responses for authenticated requests will have the header
+    /// `X-Accel-Redirect` set to the specified string joined with the path
+    /// stripped of the prefix (see `opencast.path_prefixes`).
+    /// Example: "/protected".
     #[config(validate = crate::config::validate_url_path)]
     pub x_accel_redirect: Option<String>,
 
@@ -29,7 +30,10 @@ pub struct HttpConfig {
     ///   from first HTTP header with the given name. The optional `prefix` is
     ///   stripped from the header value.
     #[config(
-        default = [{ "source": "query", "name": "jwt" }],
+        default = [
+            { "source": "header", "name": "Authorization", "prefix": "Bearer " },
+            { "source": "query", "name": "jwt" },
+        ],
         validate(!jwt_sources.is_empty(), "must not be empty"),
     )]
     pub jwt_sources: Vec<JwtSource>,
