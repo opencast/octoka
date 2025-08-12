@@ -24,7 +24,12 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
-      - run: ./util/build-release.sh
+      - name: Install musl requisites
+        run: sudo apt install -y musl-dev musl-tools
+      - name: Install musl target
+        run: rustup target add x86_64-unknown-linux-musl
+      - name: Build release
+        run: ./util/build-release.sh
       - name: create new release
         uses: softprops/action-gh-release@v1
         with:
