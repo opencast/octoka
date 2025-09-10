@@ -50,8 +50,10 @@ impl Context {
 
         // Decode and deserialize payload
         let payload = decode_base64(payload)?;
-        let payload: Payload = serde_json::from_slice(&payload)
-            .map_err(|_| JwtError::InvalidJson)?;
+        let payload: Payload = serde_json::from_slice(&payload).map_err(|e| {
+            debug!(jwt = raw, "failed to deserialize payload: {e}");
+            JwtError::InvalidJson}
+        )?;
 
         // Verify claims in payload
         self.verify_claims(&payload)?;
