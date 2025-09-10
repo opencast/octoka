@@ -65,7 +65,9 @@ mod es256 {
     }
 
     mod aws_lc {
-        use aws_lc_rs::signature::{self, EcdsaKeyPair, KeyPair, VerificationAlgorithm};
+        use aws_lc_rs::signature::{
+            self, EcdsaKeyPair, KeyPair, ParsedPublicKey, VerificationAlgorithm
+        };
 
         use super::*;
 
@@ -77,6 +79,19 @@ mod es256 {
 
             bencher.bench_local(move || {
                 signature::ECDSA_P256_SHA256_FIXED.verify_sig(&key, MESSAGE, &signature)
+            });
+        }
+
+        #[divan::bench]
+        fn verify_parsed(bencher: Bencher) {
+            let key = public_key();
+            let key = ParsedPublicKey::new(&signature::ECDSA_P256_SHA256_FIXED, key).unwrap();
+            let signature = base64_decode(SIGNATURE);
+            // signature::ECDSA_P256_SHA256_FIXED.verify_sig(&key, MESSAGE, &signature).unwrap();
+            key.verify_sig(MESSAGE, &signature).unwrap();
+
+            bencher.bench_local(move || {
+                key.verify_sig(MESSAGE, &signature)
             });
         }
 
@@ -161,7 +176,9 @@ mod es384 {
     }
 
     mod aws_lc {
-        use aws_lc_rs::signature::{self, EcdsaKeyPair, KeyPair, VerificationAlgorithm};
+        use aws_lc_rs::signature::{
+            self, EcdsaKeyPair, KeyPair, ParsedPublicKey, VerificationAlgorithm,
+        };
 
         use super::*;
 
@@ -173,6 +190,18 @@ mod es384 {
 
             bencher.bench_local(move || {
                 signature::ECDSA_P384_SHA384_FIXED.verify_sig(&key, MESSAGE, &signature)
+            });
+        }
+
+        #[divan::bench]
+        fn verify_parsed(bencher: Bencher) {
+            let key = public_key();
+            let key = ParsedPublicKey::new(&signature::ECDSA_P384_SHA384_FIXED, key).unwrap();
+            let signature = base64_decode(SIGNATURE);
+            key.verify_sig(MESSAGE, &signature).unwrap();
+
+            bencher.bench_local(move || {
+                key.verify_sig(MESSAGE, &signature)
             });
         }
 
@@ -242,7 +271,9 @@ mod ed25519 {
 
     mod aws_lc {
         use super::*;
-        use aws_lc_rs::signature::{self, Ed25519KeyPair, KeyPair, VerificationAlgorithm};
+        use aws_lc_rs::signature::{
+            self, Ed25519KeyPair, KeyPair, ParsedPublicKey, VerificationAlgorithm,
+        };
 
         #[divan::bench]
         fn verify(bencher: Bencher) {
@@ -252,6 +283,18 @@ mod ed25519 {
 
             bencher.bench_local(move || {
                 signature::ED25519.verify_sig(&key, MESSAGE, &signature)
+            });
+        }
+
+        #[divan::bench]
+        fn verify_parsed(bencher: Bencher) {
+            let key = public_key();
+            let key = ParsedPublicKey::new(&signature::ED25519, key).unwrap();
+            let signature = base64_decode(SIGNATURE);
+            key.verify_sig(MESSAGE, &signature).unwrap();
+
+            bencher.bench_local(move || {
+                key.verify_sig(MESSAGE, &signature)
             });
         }
 
