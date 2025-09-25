@@ -1,4 +1,4 @@
-use aws_lc_rs::{error::Unspecified, signature::UnparsedPublicKey};
+use aws_lc_rs::{error::Unspecified, signature::ParsedPublicKey};
 use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 
 use super::jwks::{self, Jwk};
@@ -29,7 +29,7 @@ pub(super) struct Key {
     /// The actual key. It is indeed just a wrapper for arbitrary bytes paired
     /// with an algorithm. No verification is done, which is unfortunate. See
     /// https://github.com/aws/aws-lc-rs/issues/849
-    key: UnparsedPublicKey<Vec<u8>>,
+    key: ParsedPublicKey,
     algo: Algo,
 }
 
@@ -61,10 +61,10 @@ impl Key {
 
                 Ok(Self {
                     algo: Algo::ES256,
-                    key: UnparsedPublicKey::new(
+                    key: ParsedPublicKey::new(
                         &aws_lc_rs::signature::ECDSA_P256_SHA256_FIXED,
                         ecdsa_sec1_key(x, y).context("invalid key")?,
-                    ),
+                    ).context("invalid key for algorithm ES256")?,
                 })
             }
             jwks::KeyData::Ec { crv, x, y } if crv == "P-384" => {
@@ -77,10 +77,10 @@ impl Key {
 
                 Ok(Self {
                     algo: Algo::ES384,
-                    key: UnparsedPublicKey::new(
+                    key: ParsedPublicKey::new(
                         &aws_lc_rs::signature::ECDSA_P384_SHA384_FIXED,
                         ecdsa_sec1_key(x, y).context("invalid key")?,
-                    ),
+                    ).context("invalid key for algorithm ES384")?,
                 })
             }
 
@@ -92,7 +92,8 @@ impl Key {
 
                 Ok(Self {
                     algo: Algo::EdDSA,
-                    key: UnparsedPublicKey::new(&aws_lc_rs::signature::ED25519, key_data),
+                    key: ParsedPublicKey::new(&aws_lc_rs::signature::ED25519, key_data)
+                        .context("invalid key for algorithm ED25519")?,
                 })
             }
 
@@ -104,6 +105,6 @@ impl Key {
     }
 
     pub(super) fn verify(&self, message: &str, signature: &[u8]) -> Result<(), Unspecified> {
-        self.key.verify(message.as_bytes(), signature)
+        self.key.verify_sig(message.as_bytes(), signature)
     }
 }
