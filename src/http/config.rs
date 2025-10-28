@@ -20,6 +20,16 @@ pub struct HttpConfig {
     #[config(validate = crate::config::validate_url_path)]
     pub x_accel_redirect: Option<String>,
 
+
+    /// Origins from which CORS requests are allowed. Web apps that load assets
+    /// with the 'Authorization' header must be listed here. If empty, no CORS
+    /// requests are allowed.
+    #[config(
+        default = [],
+        validate(crate::config::is_unique(cors_allowed_origins), "has duplicates"),
+    )]
+    pub cors_allowed_origins: Vec<CorsOrigin>,
+
     /// Where to look for a JWT in the HTTP request. First source has highest
     /// priority. Each array element is an object. Possible sources:
     ///
@@ -37,15 +47,6 @@ pub struct HttpConfig {
         validate(!jwt_sources.is_empty(), "must not be empty"),
     )]
     pub jwt_sources: Vec<JwtSource>,
-
-    /// Origins from which CORS requests are allowed. Web apps that load assets
-    /// with the 'Authorization' header must be listed here. If empty, no CORS
-    /// requests are allowed.
-    #[config(
-        default = [],
-        validate(crate::config::is_unique(cors_allowed_origins), "has duplicates"),
-    )]
-    pub cors_allowed_origins: Vec<CorsOrigin>,
 
     /// The TCP port the HTTP server should listen on.
     #[config(default = 4050)]
