@@ -7,7 +7,7 @@ use confique::{
 };
 
 use crate::{
-    http::HttpConfig,
+    http::{HttpConfig, OnAllow},
     jwt::JwtConfig,
     log::LogConfig,
     opencast::OpencastConfig,
@@ -82,8 +82,8 @@ pub struct Config {
 
 impl Config {
     fn validate(&self) -> Result<(), &'static str> {
-        if self.http.serve_files && self.opencast.downloads_path.is_none() {
-            return Err("`http.serve_files` is enabled, but `opencast.downloads_path` is not set");
+        if self.http.on_allow == OnAllow::File && self.opencast.downloads_path.is_none() {
+            return Err("`http.on_allow` is 'file', but `opencast.downloads_path` is not set");
         }
         Ok(())
     }
@@ -110,7 +110,7 @@ impl Config {
 
 
 /// Makes sure that the given string is a valid URL path.
-pub fn validate_url_path(value: &String) -> Result<(), &'static str> {
+pub fn validate_url_path(value: &str) -> Result<(), &'static str> {
     match hyper::http::uri::PathAndQuery::try_from(value) {
         Ok(pq) if pq.query().is_none() => Ok(()),
         _ => Err("not a valid URI path"),

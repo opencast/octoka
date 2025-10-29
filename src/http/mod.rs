@@ -20,7 +20,7 @@ use crate::{auth, config::Config, jwt, opencast::PathParts, prelude::*};
 mod config;
 mod fs;
 
-pub use self::config::{HttpConfig, JwtSource};
+pub use self::config::{HttpConfig, JwtSource, OnAllow};
 
 
 const ALLOWED_METHODS: &str = "GET, OPTIONS";
@@ -66,13 +66,13 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     }
 
     // Access is allowed: reply 200 and potentially serve file/add headers.
-    if ctx.config.http.serve_files {
+    if ctx.config.http.on_allow == OnAllow::File {
         fs::serve_file(path, &req, &ctx).await
     } else {
         let mut builder = Response::builder();
 
         // Potentially add `X-Accel-Redirect` header.
-        if let Some(prefix) = &ctx.config.http.x_accel_redirect {
+        if let OnAllow::XAccelRedirect(prefix) = &ctx.config.http.on_allow {
             // Converting to `HeaderValue` should never panic as path parts are
             // verified to be valid URI paths, which is a stricter grammar than
             // what's allowed inside header values.

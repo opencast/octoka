@@ -1,25 +1,21 @@
 use std::{net::IpAddr, time::Duration};
 
+use anyhow::anyhow;
 use serde::Deserialize;
 
 
 #[derive(Debug, confique::Config)]
-#[config(validate = Self::validate)]
 pub struct HttpConfig {
-    /// Whether files are directly served, making octoka operate as fully
-    /// functional file server. If `false`, all HTTP responses have an empty
-    /// body and a separate HTTP server needs to perform the actual file
-    /// serving. It can be used to implement "auth sub-requests", for example.
-    #[config(default = true)]
-    pub serve_files: bool,
-
-    /// If set, HTTP responses for authenticated requests will have the header
-    /// `X-Accel-Redirect` set to the specified string joined with the path
-    /// stripped of the prefix (see `opencast.path_prefixes`).
-    /// Example: "/protected".
-    #[config(validate = crate::config::validate_url_path)]
-    pub x_accel_redirect: Option<String>,
-
+    /// Specifies how to respond to requests that are considered authorized. The
+    /// status code is always 200, but body and headers vary:
+    /// - "empty": empty body, no special headers.
+    /// - "file": act as a file server, i.e. send the file in response. Requires
+    ///   `opencast.downloads_path` to be set!
+    /// - "x-accel-redirect:<prefix>": empty body, but set the `X-Accel-Redirect`
+    ///   header to `<prefix>/<stripped_path>` where `stripped_path` is the
+    ///   request path stripped of `opencast.path_prefixes`.
+    #[config(default = "file")]
+    pub on_allow: OnAllow,
 
     /// Origins from which CORS requests are allowed. Web apps that load assets
     /// with the 'Authorization' header must be listed here. If empty, no CORS
@@ -61,13 +57,29 @@ pub struct HttpConfig {
     pub shutdown_timeout: Duration,
 }
 
-impl HttpConfig {
-    fn validate(&self) -> Result<(), &'static str> {
-        if self.serve_files && self.x_accel_redirect.is_some() {
-            return Err("x_accel_redirect cannot be set when serve_files = true");
-        }
 
-        Ok(())
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(try_from = "String")]
+pub enum OnAllow {
+    Empty,
+    File,
+    XAccelRedirect(String),
+}
+
+impl TryFrom<String> for OnAllow {
+    type Error = anyhow::Error;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        if value == "empty" {
+            Ok(Self::Empty)
+        } else if value == "file" {
+            Ok(Self::File)
+        } else if let Some(path) = value.strip_prefix("x-accel-redirect:") {
+            crate::config::validate_url_path(path).map_err(|e| anyhow!(e))?;
+            Ok(Self::XAccelRedirect(path.into()))
+        } else {
+            Err(anyhow!("invalid value, check docs for possible options"))
+        }
     }
 }
 
