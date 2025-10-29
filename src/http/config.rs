@@ -6,14 +6,13 @@ use serde::Deserialize;
 
 #[derive(Debug, confique::Config)]
 pub struct HttpConfig {
-    /// Specifies how to respond to requests that are considered authorized. The
-    /// status code is always 200, but body and headers vary:
-    /// - "empty": empty body, no special headers.
+    /// Specifies how to respond to requests that are considered authorized.
+    /// - "empty": status 204, empty body, no special headers.
     /// - "file": act as a file server, i.e. send the file in response. Requires
     ///   `opencast.downloads_path` to be set!
-    /// - "x-accel-redirect:<prefix>": empty body, but set the `X-Accel-Redirect`
-    ///   header to `<prefix>/<stripped_path>` where `stripped_path` is the
-    ///   request path stripped of `opencast.path_prefixes`.
+    /// - "x-accel-redirect:<prefix>": status 204, empty body, `X-Accel-Redirect`
+    ///   header is set to `<prefix>/<stripped_path>` where `stripped_path` is
+    ///   therequest path stripped of `opencast.path_prefixes`.
     #[config(default = "file")]
     pub on_allow: OnAllow,
 

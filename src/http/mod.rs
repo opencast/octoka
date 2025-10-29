@@ -84,6 +84,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
 
         add_cors_headers(&req, &mut builder, &ctx.config.http);
         builder
+            .status(StatusCode::NO_CONTENT)
             .body(Body::Empty)
             .expect("failed to build response with empty body")
     }
