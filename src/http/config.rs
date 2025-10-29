@@ -16,6 +16,15 @@ pub struct HttpConfig {
     #[config(default = "file")]
     pub on_allow: OnAllow,
 
+    /// Specifies how to respond to requests that are considered unauthorized.
+    /// - "empty": status 403, empty body, no special headers.
+    /// - "opencast": TODO
+    /// - "x-accel-redirect:<prefix>": status 204, empty body, `X-Accel-Redirect`
+    ///   header is set to `<prefix>/<path>` where `path` is the full request
+    ///   path.
+    #[config(default = "empty")]
+    pub on_forbidden: OnForbidden,
+
     /// Origins from which CORS requests are allowed. Web apps that load assets
     /// with the 'Authorization' header must be listed here. If empty, no CORS
     /// requests are allowed.
@@ -73,6 +82,31 @@ impl TryFrom<String> for OnAllow {
             Ok(Self::Empty)
         } else if value == "file" {
             Ok(Self::File)
+        } else if let Some(path) = value.strip_prefix("x-accel-redirect:") {
+            crate::config::validate_url_path(path).map_err(|e| anyhow!(e))?;
+            Ok(Self::XAccelRedirect(path.into()))
+        } else {
+            Err(anyhow!("invalid value, check docs for possible options"))
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[serde(try_from = "String")]
+pub enum OnForbidden {
+    Empty,
+    Proxy,
+    XAccelRedirect(String),
+}
+
+impl TryFrom<String> for OnForbidden {
+    type Error = anyhow::Error;
+
+    fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
+        if value == "empty" {
+            Ok(Self::Empty)
+        } else if value == "proxy" {
+            Ok(Self::Proxy)
         } else if let Some(path) = value.strip_prefix("x-accel-redirect:") {
             crate::config::validate_url_path(path).map_err(|e| anyhow!(e))?;
             Ok(Self::XAccelRedirect(path.into()))

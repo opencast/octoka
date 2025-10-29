@@ -61,8 +61,22 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     // Perform auth check
     let is_allowed = auth::is_allowed(path, jwt, &ctx).await;
     if !is_allowed {
-        trace!(path = req.uri().path(), jwt, "response: 403 Forbidden");
-        return error_response(StatusCode::FORBIDDEN);
+        return match &ctx.config.http.on_forbidden {
+            config::OnForbidden::Empty => {
+                trace!(path = req.uri().path(), jwt, "response: 403 Forbidden");
+                error_response(StatusCode::FORBIDDEN)
+            }
+            config::OnForbidden::Proxy => todo!(),
+            config::OnForbidden::XAccelRedirect(prefix) => {
+                trace!(path = req.uri().path(), jwt, "response: 204 with X-Accel-Redirect");
+
+                Response::builder()
+                    .header("X-Accel-Redirect", x_accel_redirect_header(prefix, path.full_path()))
+                    .status(StatusCode::NO_CONTENT)
+                    .body(Body::Empty)
+                    .expect("failed to build response with empty body")
+            }
+        };
     }
 
     // Access is allowed: reply 200 and potentially serve file/add headers.
@@ -73,12 +87,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
 
         // Potentially add `X-Accel-Redirect` header.
         if let OnAllow::XAccelRedirect(prefix) = &ctx.config.http.on_allow {
-            // Converting to `HeaderValue` should never panic as path parts are
-            // verified to be valid URI paths, which is a stricter grammar than
-            // what's allowed inside header values.
-            let redirect_path = format!("/{}/{}", prefix.trim_matches('/'), path.without_prefix());
-            let value = HeaderValue::try_from(redirect_path)
-                .expect("invalid redirect_path for X-Accel-Redirect");
+            let value = x_accel_redirect_header(prefix, path.without_prefix());
             builder = builder.header("X-Accel-Redirect", value);
         }
 
@@ -177,6 +186,14 @@ impl JwtSource {
     }
 }
 
+fn x_accel_redirect_header(prefix: &str, path: &str) -> HeaderValue {
+    // Converting to `HeaderValue` should never panic as the prefix and path
+    // parts are verified to be valid URI paths, which is a stricter grammar
+    // than what's allowed inside header values.
+    let redirect_path = format!("/{}/{}", prefix.trim_matches('/'), path);
+    HeaderValue::try_from(redirect_path)
+        .expect("invalid redirect_path for X-Accel-Redirect")
+}
 
 fn error_response(status: StatusCode) -> Response {
     let body = format!("{} {}", status.as_u16(), status.canonical_reason().unwrap_or_default());
