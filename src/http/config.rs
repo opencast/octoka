@@ -18,7 +18,10 @@ pub struct HttpConfig {
 
     /// Specifies how to respond to requests that are considered unauthorized.
     /// - "empty": status 403, empty body, no special headers.
-    /// - "opencast": TODO
+    /// - "proxy": forwards the incoming request to Opencast. If `on_allow` is
+    ///   "empty" and Opencast replies 2xx, Octoka replies with 204 (as if Octoka
+    ///   itself concluded the request was authorized). Otherwise, Opencast's
+    ///   response is used mostly as is.
     /// - "x-accel-redirect:<prefix>": status 204, empty body, `X-Accel-Redirect`
     ///   header is set to `<prefix>/<path>` where `path` is the full request
     ///   path.

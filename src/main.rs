@@ -37,10 +37,7 @@ async fn main() -> Result<()> {
 
         Command::Run => {
             let config = load_config_and_init_logger(&cli)?;
-            let ctx = http::Context {
-                jwt: jwt::Context::new(&config.jwt).await?,
-                config,
-            };
+            let ctx = http::Context::new(config).await?;
             http::serve(ctx).await?;
         }
     }

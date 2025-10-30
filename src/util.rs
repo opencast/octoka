@@ -7,9 +7,13 @@ use crate::prelude::*;
 pub type EmptyHttpBody = http_body_util::Empty<&'static [u8]>;
 
 /// HTTP client to send GET requests without body.
-pub type SimpleHttpClient = HyperClient<HttpsConnector<HttpConnector>, EmptyHttpBody>;
+pub type SimpleHttpClient<B = EmptyHttpBody> = HyperClient<HttpsConnector<HttpConnector>, B>;
 
-pub fn http_client() -> Result<SimpleHttpClient> {
+pub fn http_client<B>() -> Result<SimpleHttpClient<B>>
+where
+    B: Send + hyper::body::Body,
+    B::Data: Send,
+{
     let https = HttpsConnectorBuilder::new()
         .with_native_roots()
         .context("failed to load native certificate roots")?
