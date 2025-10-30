@@ -1,10 +1,11 @@
-use std::{path::{Path, PathBuf}, time::Duration};
+use std::{fmt, path::{Path, PathBuf}, time::Duration};
 
 use anyhow::{ensure, Context as _, Error};
 use confique::{
     Config as _,
-    serde::{self, Deserialize as _},
+    serde::{self, Deserialize},
 };
+use http::{Uri, uri::Scheme};
 
 use crate::{
     http::{HttpConfig, OnAllow},
@@ -165,5 +166,70 @@ where
         "h" => Ok(Duration::from_secs(num * 60 * 60)),
         "d" => Ok(Duration::from_secs(num * 60 * 60 * 24)),
         _ => Err(D::Error::custom("invalid unit of time for duration")),
+    }
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(try_from = "String")]
+pub(crate) struct HttpHost {
+    pub(crate) scheme: hyper::http::uri::Scheme,
+    pub(crate) authority: hyper::http::uri::Authority,
+}
+
+impl HttpHost {
+    /// Returns a full URI by combining `self` with the given path+query. Panics
+    /// if `pq` is malformed!
+    pub fn with_path_and_query<T>(self, pq: T) -> Uri
+    where
+        T: TryInto<http::uri::PathAndQuery>,
+        <T as TryInto<http::uri::PathAndQuery>>::Error: Into<http::Error>,
+    {
+        self.builder()
+            .path_and_query(pq)
+            .build()
+            .expect("invalid URI path+query")
+    }
+
+    pub fn builder(self) -> http::uri::Builder {
+        Uri::builder()
+            .scheme(self.scheme)
+            .authority(self.authority)
+    }
+}
+
+impl fmt::Display for HttpHost {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}://{}", self.scheme, self.authority)
+    }
+}
+
+impl fmt::Debug for HttpHost {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+impl TryFrom<String> for HttpHost {
+    type Error = anyhow::Error;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let uri: Uri = value.parse()?;
+
+        let has_real_path = uri.path_and_query()
+            .map_or(false, |pq| !pq.as_str().is_empty() && pq.as_str() != "/");
+        anyhow::ensure!(!has_real_path, "must not contain path/query part");
+        anyhow::ensure!(!value.contains('#'), "must not contain fragment part");
+
+        let parts = uri.into_parts();
+        let Some(scheme) = parts.scheme else {
+            bail!("must contain scheme part");
+        };
+        anyhow::ensure!(scheme == Scheme::HTTP || scheme == Scheme::HTTPS,
+            "must be http(s) scheme");
+        let Some(authority) = parts.authority else {
+            bail!("must contain authority part");
+        };
+        anyhow::ensure!(!authority.as_str().contains('@'), "must not contain user part");
+
+        Ok(Self { scheme, authority })
     }
 }

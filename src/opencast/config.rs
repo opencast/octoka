@@ -1,11 +1,18 @@
 use std::path::PathBuf;
 
+use crate::config::HttpHost;
+
 #[derive(Debug, confique::Config)]
 pub struct OpencastConfig {
     /// Path to the Opencast `downloads/` folder, e.g. `/mnt/opencast/downloads`.
     /// Settings this is required in some situations (e.g. if `http.serve_files`
     /// is enabled).
     pub downloads_path: Option<PathBuf>,
+
+    /// Host of Opencast. Currently used to proxy requests if `http.on_forbidden`
+    /// is set to "proxy".
+    #[config(default = "http://localhost:8080")]
+    pub host: HttpHost,
 
     /// List of possible path prefixes that should be handled by octoka. For
     /// most Opencast systems, the default is fine as all paths start with
