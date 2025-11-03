@@ -14,6 +14,12 @@ pub struct OpencastConfig {
     #[config(default = "http://localhost:8080")]
     pub host: HttpHost,
 
+    /// If set, requests that cannot be authorized by octoka itself (purely
+    /// based on JWT) will be forwarded to OC and octoka will use OC's response
+    /// as indication of whether the request is authorized.
+    #[config(default = true)]
+    pub use_as_fallback: bool,
+
     /// List of possible path prefixes that should be handled by octoka. For
     /// most Opencast systems, the default is fine as all paths start with
     /// `/static/...`.

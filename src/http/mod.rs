@@ -4,7 +4,6 @@ use std::{
 };
 
 use futures::FutureExt as _;
-use http::HeaderMap;
 use http_body_util::Full;
 use hyper::{
     Method, Request, StatusCode,
@@ -16,11 +15,17 @@ use hyper::{
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 
-use crate::{auth, config::Config, jwt, opencast::PathParts, prelude::*, util::SimpleHttpClient};
+use crate::{
+    auth,
+    config::Config,
+    jwt,
+    opencast::PathParts,
+    prelude::*,
+    util::{EmptyHttpBody, SimpleHttpClient}
+};
 
 mod config;
 mod fs;
-mod proxy;
 
 pub use self::config::{HttpConfig, JwtSource, OnAllow};
 
@@ -61,17 +66,23 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     let jwt = jwt.as_ref().map(|cow| cow.as_ref());
 
     // Perform auth check
-    let is_allowed = auth::is_allowed(path, jwt, &ctx).await;
+    let mut is_allowed = auth::is_allowed(path, jwt, &ctx).await;
+
+    // If we cannot authorize the request, maybe Opencast can.
+    if !is_allowed && ctx.config.opencast.use_as_fallback {
+        match ask_opencast(&req, &ctx).await {
+            Ok(allowed) => is_allowed = allowed,
+            Err(r) => return r,
+        }
+    }
+
+    // If we deny access, reply according to the config.
     if !is_allowed {
         return match &ctx.config.http.on_forbidden {
             config::OnForbidden::Empty => {
                 trace!(path = req.uri().path(), jwt, "not allowed -> response: 403 Forbidden");
                 error_response(StatusCode::FORBIDDEN)
             }
-            config::OnForbidden::Proxy => {
-                trace!(path = req.uri().path(), jwt, "not allowed -> proxy to Opencast");
-                proxy::handle(req, ctx).await
-            },
             config::OnForbidden::XAccelRedirect(prefix) => {
                 trace!(path = req.uri().path(), jwt,
                     "not allowed -> response: 204 with X-Accel-Redirect");
@@ -89,86 +100,19 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     if ctx.config.http.on_allow == OnAllow::File {
         fs::serve_file(path, &req, &ctx).await
     } else {
-        let cors = CorsInfo::new(&req, &ctx.config.http);
-        let mut response = empty_204_response(cors);
+        let mut builder = Response::builder();
 
         // Potentially add `X-Accel-Redirect` header.
         if let OnAllow::XAccelRedirect(prefix) = &ctx.config.http.on_allow {
             let value = x_accel_redirect_header(prefix, path.without_prefix());
-            response.headers_mut().append("X-Accel-Redirect", value);
+            builder = builder.header("X-Accel-Redirect", value);
         }
 
-        response
-    }
-}
-
-enum CorsInfo {
-    NotAllowed,
-    Allowed {
-        origin: HeaderValue,
-    },
-}
-
-impl CorsInfo {
-    fn new(req: &Request<Incoming>, config: &HttpConfig) -> Self {
-        // Only allow CORS if Origin is allowed by the config. This also excludes
-        // `null`.
-        let origin = match req.headers().get(header::ORIGIN) {
-            Some(h) if config.cors_allowed_origins.iter().any(|o| h == o.as_str()) => h,
-            origin => {
-                trace!(?origin, "CORS denied as origin not whitelisted");
-                return Self::NotAllowed;
-            }
-        };
-
-        if req.method() == Method::OPTIONS {
-            // Only allow 'Authorization' header.
-            match req.headers().get(header::ACCESS_CONTROL_REQUEST_HEADERS) {
-                Some(h) if h.as_bytes()
-                    .split(|b| *b == b',')
-                    .all(|rh| rh.trim_ascii().eq_ignore_ascii_case(b"Authorization")) => {}
-                req_headers => {
-                    trace!(?req_headers, "CORS denied due to disallowed headers");
-                    return Self::NotAllowed;
-                }
-            }
-
-            // Require this header to be "GET".
-            match req.headers().get(header::ACCESS_CONTROL_REQUEST_METHOD) {
-                Some(h) if h == "GET" => {}
-                method => {
-                    trace!(?method, "CORS denied due to disallowed method");
-                    return Self::NotAllowed;
-                }
-            }
-        }
-
-        Self::Allowed { origin: origin.clone() }
-    }
-
-    fn add_headers(self, headers: &mut HeaderMap<HeaderValue>) {
-        let Self::Allowed { origin } = self else {
-            return;
-        };
-
-        // Note: header values returned here have no leading or trailing
-        // whitespace. See https://github.com/seanmonstar/httparse/pull/48
-        // and RFC 7230 section 3.2.3.
-
-        // At this point, we allow the CORS request
-        trace!(?origin, "Adding CORS headers");
-        headers.extend([
-            (header::ACCESS_CONTROL_ALLOW_ORIGIN, origin),
-            (header::ACCESS_CONTROL_ALLOW_CREDENTIALS, HeaderValue::from_static("true")),
-            (header::ACCESS_CONTROL_ALLOW_METHODS, HeaderValue::from_static(ALLOWED_METHODS)),
-            (header::ACCESS_CONTROL_ALLOW_HEADERS, HeaderValue::from_static("Authorization")),
-
-            // We allow browser to cache this CORS result for 24h. We allow it for the same
-            // input all the time, so nothing here will change, except if the config is
-            // changed, which happens very rarely. I cannot really think of anything that
-            // would make this caching unsafe.
-            (header::ACCESS_CONTROL_MAX_AGE, HeaderValue::from_static("86400")),
-        ]);
+        add_cors_headers(&req, &mut builder, &ctx.config.http);
+        builder
+            .status(StatusCode::NO_CONTENT)
+            .body(Body::Empty)
+            .expect("failed to build response with empty body")
     }
 }
 
@@ -178,7 +122,86 @@ fn add_cors_headers(
     response: &mut http::response::Builder,
     config: &HttpConfig,
 ) {
-    CorsInfo::new(req, config).add_headers(response.headers_mut().unwrap());
+    // Note: header values returned here have no leading or trailing
+    // whitespace. See https://github.com/seanmonstar/httparse/pull/48
+    // and RFC 7230 section 3.2.3.
+
+    // Only allow CORS if Origin is allowed by the config. This also excludes
+    // `null`.
+    let origin = match req.headers().get(header::ORIGIN) {
+        Some(h) if config.cors_allowed_origins.iter().any(|o| h == o.as_str()) => h,
+        origin => {
+            trace!(?origin, "CORS denied as origin not whitelisted");
+            return;
+        }
+    };
+
+    if req.method() == Method::OPTIONS {
+        // Only allow 'Authorization' header.
+        match req.headers().get(header::ACCESS_CONTROL_REQUEST_HEADERS) {
+            Some(h) if h.as_bytes()
+                .split(|b| *b == b',')
+                .all(|rh| rh.trim_ascii().eq_ignore_ascii_case(b"Authorization")) => {}
+            req_headers => {
+                trace!(?req_headers, "CORS denied due to disallowed headers");
+                return;
+            }
+        }
+
+        // Require this header to be "GET".
+        match req.headers().get(header::ACCESS_CONTROL_REQUEST_METHOD) {
+            Some(h) if h == "GET" => {}
+            method => {
+                trace!(?method, "CORS denied due to disallowed method");
+                return;
+            }
+        }
+    }
+
+    // At this point, we allow the CORS request
+    trace!(?origin, "Adding CORS headers");
+    response.headers_mut().unwrap().extend([
+        (header::ACCESS_CONTROL_ALLOW_ORIGIN, origin.clone()),
+        (header::ACCESS_CONTROL_ALLOW_CREDENTIALS, HeaderValue::from_static("true")),
+        (header::ACCESS_CONTROL_ALLOW_METHODS, HeaderValue::from_static(ALLOWED_METHODS)),
+        (header::ACCESS_CONTROL_ALLOW_HEADERS, HeaderValue::from_static("Authorization")),
+
+        // We allow browser to cache this CORS result for 24h. We allow it for the same
+        // input all the time, so nothing here will change, except if the config is
+        // changed, which happens very rarely. I cannot really think of anything that
+        // would make this caching unsafe.
+        (header::ACCESS_CONTROL_MAX_AGE, HeaderValue::from_static("86400")),
+    ]);
+}
+
+/// Sends a HEAD request to Opencast with the headers and path/query of `req`.
+/// Returns whether OC replied with 2xx.
+async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<bool, Response> {
+    // TODO: maybe don't send anything to OC if there are no cookies in the
+    // incoming request?
+
+    let uri = ctx.config.opencast.host.clone()
+        .with_path_and_query(orig_req.uri().path_and_query().unwrap().clone());
+    trace!(?uri, "asking OC for auth-info");
+
+    let mut req = Request::head(uri)
+        .body(EmptyHttpBody::new())
+        // There should be no reason building this request can fail.
+        .expect("failed to build request for OC");
+    *req.headers_mut() = orig_req.headers().clone();
+
+    let response = match ctx.oc_client.request(req).await {
+        Ok(r) => r,
+        Err(e) => {
+            debug!("error sending request to OC: {e}");
+            return Err(error_response(StatusCode::BAD_GATEWAY));
+        }
+    };
+
+    // If OC replies 2xx, the request is treated as authorized.
+    let is_allowed = response.status().is_success();
+    trace!(is_allowed, status = ?response.status(), "OC replied");
+    Ok(is_allowed)
 }
 
 impl JwtSource {
@@ -227,20 +250,11 @@ fn error_response(status: StatusCode) -> Response {
         .unwrap()
 }
 
-fn empty_204_response(cors: CorsInfo) -> Response {
-    let mut builder = Response::builder();
-    cors.add_headers(builder.headers_mut().unwrap());
-    builder
-        .status(StatusCode::NO_CONTENT)
-        .body(Body::Empty)
-        .expect("failed to build response with empty body")
-}
-
 /// Data available to each request handler via reference.
 pub struct Context {
     pub config: Config,
     pub jwt: jwt::Context,
-    pub oc_client: SimpleHttpClient<Incoming>,
+    pub oc_client: SimpleHttpClient,
 }
 
 impl Context {
@@ -400,7 +414,6 @@ enum Body {
     Empty,
     Tiny(Full<Bytes>),
     File(fs::FileBody),
-    Proxy(Incoming),
 }
 
 impl Body {
@@ -411,7 +424,7 @@ impl Body {
 
 impl hyper::body::Body for Body {
     type Data = Bytes;
-    type Error = anyhow::Error;
+    type Error = std::io::Error;
 
     fn poll_frame(
         mut self: std::pin::Pin<&mut Self>,
@@ -419,9 +432,9 @@ impl hyper::body::Body for Body {
     ) -> std::task::Poll<Option<std::result::Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
         match *self {
             Self::Empty => Poll::Ready(None),
-            Self::Tiny(ref mut inner) => Pin::new(inner).poll_frame(cx).map_err(Into::into),
-            Self::File(ref mut file) => Pin::new(file).poll_frame(cx).map_err(Into::into),
-            Self::Proxy(ref mut incoming) => Pin::new(incoming).poll_frame(cx).map_err(Into::into),
+            Self::Tiny(ref mut inner) => Pin::new(inner).poll_frame(cx)
+                .map_err(|never| match never {}),
+            Self::File(ref mut file) => Pin::new(file).poll_frame(cx),
         }
     }
 }

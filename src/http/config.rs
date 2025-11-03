@@ -18,10 +18,6 @@ pub struct HttpConfig {
 
     /// Specifies how to respond to requests that are considered unauthorized.
     /// - "empty": status 403, empty body, no special headers.
-    /// - "proxy": forwards the incoming request to Opencast. If `on_allow` is
-    ///   "empty" and Opencast replies 2xx, Octoka replies with 204 (as if Octoka
-    ///   itself concluded the request was authorized). Otherwise, Opencast's
-    ///   response is used mostly as is.
     /// - "x-accel-redirect:<prefix>": status 204, empty body, `X-Accel-Redirect`
     ///   header is set to `<prefix>/<path>` where `path` is the full request
     ///   path.
@@ -98,7 +94,6 @@ impl TryFrom<String> for OnAllow {
 #[serde(try_from = "String")]
 pub enum OnForbidden {
     Empty,
-    Proxy,
     XAccelRedirect(String),
 }
 
@@ -108,8 +103,6 @@ impl TryFrom<String> for OnForbidden {
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {
         if value == "empty" {
             Ok(Self::Empty)
-        } else if value == "proxy" {
-            Ok(Self::Proxy)
         } else if let Some(path) = value.strip_prefix("x-accel-redirect:") {
             crate::config::validate_url_path(path).map_err(|e| anyhow!(e))?;
             Ok(Self::XAccelRedirect(path.into()))
