@@ -166,7 +166,13 @@ impl KeyManager {
             keys: ArcSwap::from_pointee(Keys::empty()),
             fetch_guards,
             http_client,
-            last_backup_refresh: RwLock::new(Instant::now()),
+            last_backup_refresh: RwLock::new(
+                // We want to allow a single a backup refresh at the very start.
+                // However, the subtract can fail on some platforms (where
+                // `Instant` is an unsigned int with 0 at boot), so we have a
+                // fallback.
+                Instant::now().checked_sub(BACKUP_REFRESH_RATE_LIMIT).unwrap_or(Instant::now())
+            ),
         });
 
         // Fetching all sources once
