@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, time::Duration};
 
 use bytes::Bytes;
 use serde::Deserialize;
@@ -6,6 +6,8 @@ use serde::Deserialize;
 use super::{Kid, crypto};
 use crate::{jwt::JwksUrl, prelude::*, util::SimpleHttpClient};
 
+
+const FETCH_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// A JSON Web Key Set, defined by RFC 7517 (see section 5 and 4). The following
 /// types don't fully implement the RFC, as we only support we few keys anyway.
@@ -79,8 +81,11 @@ pub(super) struct FetchedData {
 pub async fn fetch(uri: &JwksUrl, http_client: &SimpleHttpClient) -> Result<FetchedData> {
     use http_body_util::BodyExt;
 
-    let response = http_client.get(uri.0.clone()).await
-        .context("failed to fetch JWKS")?;
+    trace!(?uri, "fetching JWKS");
+    let response = tokio::select! {
+        r = http_client.get(uri.0.clone()) => r.context("failed to fetch JWKS")?,
+        _ = tokio::time::sleep(FETCH_TIMEOUT) => bail!("timeout {FETCH_TIMEOUT:?}"),
+    };
 
     if !response.status().is_success() {
         bail!("JWKS URL returned non 2xx-code");

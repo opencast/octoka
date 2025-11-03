@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use crate::{http::Context, opencast::PathParts, prelude::*};
 
 
+const JWT_VERIFY_TIMEOUT: Duration = Duration::from_millis(2500);
 
 pub async fn is_allowed(
     path: PathParts<'_>,
@@ -12,7 +15,15 @@ pub async fn is_allowed(
         return false;
     };
 
-    let info = match ctx.jwt.decode_and_verify(jwt).await {
+    let res = tokio::select! {
+        res = ctx.jwt.decode_and_verify(jwt) => res,
+        _ = tokio::time::sleep(JWT_VERIFY_TIMEOUT) => {
+            warn!(?JWT_VERIFY_TIMEOUT, "could not verify JWT in time -> denying access");
+            return false;
+        }
+    };
+
+    let info = match res {
         Ok(info) => info,
         Err(e) => {
             debug!("rejected JWT ({e:?}) -> denying access");

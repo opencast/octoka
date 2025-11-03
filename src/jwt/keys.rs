@@ -175,17 +175,19 @@ impl KeyManager {
             ),
         });
 
-        // Fetching all sources once
-        info!("Fetching trusted keys for initialization");
-        this.refresh(&config.trusted_keys).await;
-        info!("Fetched {} trusted keys", this.keys.load().len());
-
-        // Start background refresh task, if configured.
-        if config.background_key_refresh {
+        // Fetching all sources once & setting up background refresh
+        {
             let this = this.clone();
             let config = config.clone();
             tokio::spawn(async move {
-                this.background_refresh(&config).await;
+                info!("Fetching trusted keys for initialization");
+                this.refresh(&config.trusted_keys).await;
+                info!("Fetched {} trusted keys", this.keys.load().len());
+
+                // Start background refresh task, if configured.
+                if config.background_key_refresh {
+                    this.background_refresh(&config).await;
+                }
             });
         }
 
