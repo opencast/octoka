@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow, convert::Infallible, error::Error, net::SocketAddr, panic::AssertUnwindSafe,
-    pin::Pin, sync::Arc, task::Poll,
+    pin::Pin, sync::Arc, task::Poll, time::Duration,
 };
 
 use futures::FutureExt as _;
@@ -194,11 +194,17 @@ async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<boo
         .expect("failed to build request for OC");
     *req.headers_mut() = orig_req.headers().clone();
 
-    let response = match ctx.oc_client.request(req).await {
-        Ok(r) => r,
-        Err(e) => {
-            debug!("error sending request to OC: {e}");
-            return Err(error_response(StatusCode::BAD_GATEWAY));
+    let response = tokio::select! {
+        res = ctx.oc_client.request(req) => match res {
+            Ok(r) => r,
+            Err(e) => {
+                debug!("error sending request to OC: {e}");
+                return Err(error_response(StatusCode::BAD_GATEWAY));
+            }
+        },
+        _ = tokio::time::sleep(Duration::from_secs(3)) => {
+            debug!("timeout waiting for OC");
+            return Err(error_response(StatusCode::GATEWAY_TIMEOUT));
         }
     };
 
