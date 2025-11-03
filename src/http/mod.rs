@@ -130,8 +130,12 @@ fn add_cors_headers(
     // `null`.
     let origin = match req.headers().get(header::ORIGIN) {
         Some(h) if config.cors_allowed_origins.iter().any(|o| h == o.as_str()) => h,
-        origin => {
+        Some(origin) => {
             trace!(?origin, "CORS denied as origin not whitelisted");
+            return;
+        }
+        None => {
+            trace!("not setting CORS headers as 'Origin' header is not set");
             return;
         }
     };
