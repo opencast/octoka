@@ -1,0 +1,19 @@
+# This is a test container to have an nginx in front of octoka (as it's
+# otherwise hard to test).
+
+services:
+  octoka-test-nginx:
+    image: nginx
+    # Note: host networking is enabled as docker+nginx have some weird problem
+    # with DNS resolving when using `proxy_pass http://host.docker.internal:8080$request_uri`.
+    # Don't ask me what's going on, but you've been warned!
+    network_mode: host
+    # Without host networking:
+      # ports:
+      #   - "1234:1234"
+      # extra_hosts:
+      #   - "host.docker.internal:host-gateway"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      # Allows you to mount your OC downloads dir
+      # - ../../../opencast/build/opencast-dist-develop-18-SNAPSHOT/data/opencast/:/mnt/opencast
