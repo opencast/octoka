@@ -78,12 +78,12 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
 
     // If we deny access, reply according to the config.
     if !is_allowed {
-        return match &ctx.config.http.on_forbidden {
-            config::OnForbidden::Empty => {
+        return match &ctx.config.http.on_deny {
+            config::OnDeny::Empty => {
                 trace!(path = req.uri().path(), jwt, "not allowed -> response: 403 Forbidden");
                 error_response(StatusCode::FORBIDDEN)
             }
-            config::OnForbidden::XAccelRedirect(prefix) => {
+            config::OnDeny::XAccelRedirect(prefix) => {
                 trace!(path = req.uri().path(), jwt,
                     "not allowed -> response: 204 with X-Accel-Redirect");
 

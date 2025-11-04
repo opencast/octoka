@@ -22,7 +22,7 @@ pub struct HttpConfig {
     ///   header is set to `<prefix>/<path>` where `path` is the full request
     ///   path.
     #[config(default = "empty")]
-    pub on_forbidden: OnForbidden,
+    pub on_deny: OnDeny,
 
     /// Origins from which CORS requests are allowed. Web apps that load assets
     /// with the 'Authorization' header must be listed here. If empty, no CORS
@@ -92,12 +92,12 @@ impl TryFrom<String> for OnAllow {
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 #[serde(try_from = "String")]
-pub enum OnForbidden {
+pub enum OnDeny {
     Empty,
     XAccelRedirect(String),
 }
 
-impl TryFrom<String> for OnForbidden {
+impl TryFrom<String> for OnDeny {
     type Error = anyhow::Error;
 
     fn try_from(value: String) -> std::result::Result<Self, Self::Error> {

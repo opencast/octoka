@@ -9,8 +9,7 @@ pub struct OpencastConfig {
     /// is enabled).
     pub downloads_path: Option<PathBuf>,
 
-    /// Host of Opencast. Currently used to proxy requests if `http.on_forbidden`
-    /// is set to "proxy".
+    /// Host of Opencast. Currently used for `use_as_fallback`.
     #[config(default = "http://localhost:8080")]
     pub host: HttpHost,
 
