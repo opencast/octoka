@@ -1,5 +1,7 @@
 use std::path::PathBuf;
 
+use serde::Deserialize;
+
 use crate::config::HttpHost;
 
 #[derive(Debug, confique::Config)]
@@ -9,15 +11,24 @@ pub struct OpencastConfig {
     /// is enabled).
     pub downloads_path: Option<PathBuf>,
 
-    /// Host of Opencast. Currently used for `use_as_fallback`.
+    /// Host of Opencast. Currently used for `fallback`.
     #[config(default = "http://localhost:8080")]
     pub host: HttpHost,
 
-    /// If set, requests that cannot be authorized by octoka itself (purely
-    /// based on JWT) will be forwarded to OC and octoka will use OC's response
-    /// as indication of whether the request is authorized.
-    #[config(default = true)]
-    pub use_as_fallback: bool,
+    /// Specifies if/how Opencast is used as a fallback when requests cannot be
+    /// authorized by octoka itself (purely based on JWT).
+    ///
+    /// - "none": no fallback, Opencast is not contacted.
+    /// - "head": an HTTP HEAD request is sent to Opencast, with the same URI
+    ///   and headers as the incoming request. A 2xx status code is interpreted
+    ///   as "allowed", 404 causes octoka to also reply 404, everything else is
+    ///   treated as disallowed.
+    /// - "get": like "head", but with HTTP method GET. This exists only for
+    ///   older Opencast which had incorrect responses to HEAD requests. If you
+    ///   use this, set `x.accel.redirect` in OC, in order to not send the file.
+    ///   This option will get deprecated and removed in the future.
+    #[config(default = "head")]
+    pub fallback: FallbackMode,
 
     /// List of possible path prefixes that should be handled by octoka. For
     /// most Opencast systems, the default is fine as all paths start with
@@ -42,4 +53,12 @@ fn validate_path_prefixes(paths: &Vec<String>) -> Result<(), &'static str> {
     }
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FallbackMode {
+    None,
+    Head,
+    Get,
 }

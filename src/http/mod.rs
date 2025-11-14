@@ -19,7 +19,7 @@ use crate::{
     auth,
     config::Config,
     jwt,
-    opencast::PathParts,
+    opencast::{FallbackMode, PathParts},
     prelude::*,
     util::{EmptyHttpBody, SimpleHttpClient}
 };
@@ -69,7 +69,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     let mut is_allowed = auth::is_allowed(path, jwt, &ctx).await;
 
     // If we cannot authorize the request, maybe Opencast can.
-    if !is_allowed && ctx.config.opencast.use_as_fallback {
+    if !is_allowed && ctx.config.opencast.fallback != FallbackMode::None {
         match ask_opencast(&req, &ctx).await {
             Ok(allowed) => is_allowed = allowed,
             Err(r) => return r,
@@ -185,7 +185,14 @@ async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<boo
         .with_path_and_query(orig_req.uri().path_and_query().unwrap().clone());
     trace!(?uri, "asking OC for auth-info");
 
-    let mut req = Request::head(uri)
+
+    let mut req = Request::builder()
+        .uri(uri)
+        .method(match ctx.config.opencast.fallback {
+            FallbackMode::Head => Method::HEAD,
+            FallbackMode::Get => Method::GET,
+            FallbackMode::None => unreachable!(),
+        })
         .body(EmptyHttpBody::new())
         // There should be no reason building this request can fail.
         .expect("failed to build request for OC");

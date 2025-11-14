@@ -1,6 +1,6 @@
 mod config;
 
-pub use self::config::OpencastConfig;
+pub use self::config::{FallbackMode, OpencastConfig};
 
 
 /// Represents a path to a static Opencast file split into its relevant

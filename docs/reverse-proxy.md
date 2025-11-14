@@ -22,7 +22,7 @@ The simplest setup without notable disadvantages has nginx simply `proxy_pass` t
 Relevant octoka config:
 - `opencast.downloads_path` set correctly (e.g. `/mnt/opencast/downloads`)
 - `opencast.host` set correctly (default: `localhost:8080`)
-- `opencast.use_as_fallback = true` (this is the default)
+- `opencast.fallback` not set to "none" (this is the default)
 - `http.on_allow = "file"` (this is the default)
 
 Relevant nginx config:
@@ -73,7 +73,7 @@ Only the `auth_request` method does not have these two variants, as it always le
 ### Option "`auth_request`"
 
 - `opencast.host` set correctly (default: `localhost:8080`)
-- `opencast.use_as_fallback = true` (this is the default)
+- `opencast.fallback` not set to "none" (this is the default)
 - `http.on_allow = "empty"`
 
 ```
@@ -89,11 +89,12 @@ location /octoka {
 }
 ```
 
-Instead of using `use_as_fallback`, you can implement the fallback inside `location /` with the tricks below, but at that point it's getting really involved and I can't think of a reason to go down that route.
+Instead of using `opencast.fallback`, you can implement the fallback inside `location /` with the tricks below.
+You might want to use that, as otherwise OC might reply 404, which is treated as an error in nginx.
 
 ### Option "`error_page`"
 
-- `opencast.use_as_fallback = false`
+- `opencast.fallback = "none"`
 
 ```
 location /static {
