@@ -24,15 +24,15 @@ pub(crate) struct LogConfig {
     /// emitted. Valid log levels: off, error, warn, info, debug, trace.
     ///
     /// Take the following example: the following config only allows ≥"info"
-    /// logs from octoka generally, but also ≥"trace" messages from the `db`
-    /// submodule. But it completely disables all logs from `tobira::db::tx`.
+    /// logs from octoka generally, but also ≥"trace" messages from the `http`
+    /// submodule. But it completely disables all logs from `tobira::http::fs`.
     /// Finally, it also enabled ≥"debug" messages from one of octoka's
     /// dependencies, the HTTP library `hyper`.
     ///
     ///    [log]
     ///    filters.octoka = "info"
-    ///    filters."octoka::db" = "trace"
-    ///    filters."octoka::db::tx" = "off"
+    ///    filters."octoka::http" = "trace"
+    ///    filters."octoka::http::fs" = "off"
     ///    filters.hyper = "debug"
     #[config(default = { "octoka": "info" })]
     pub(crate) filters: Filters,
