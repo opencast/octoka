@@ -181,9 +181,6 @@ fn add_cors_headers(
 /// Sends a HEAD request to Opencast with the headers and path/query of `req`.
 /// Returns whether OC replied with 2xx.
 async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<bool, Response> {
-    // TODO: maybe don't send anything to OC if there are no cookies in the
-    // incoming request?
-
     let uri = ctx.config.opencast.host.clone()
         .with_path_and_query(orig_req.uri().path_and_query().unwrap().clone());
     trace!(?uri, "asking OC for auth-info");
