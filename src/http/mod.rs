@@ -205,6 +205,16 @@ async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<boo
         }
     };
 
+    // If OC replies 404, then it doesn't make a lot of sense for use to treat
+    // it as 403. For `on_allow = "file"` and `"x-accel-redirect"`, replying
+    // with 404 is certainly the correct thing to do.
+    //
+    // TODO: think about `on_allow = "empty"` more! Nginx treats auth_requests
+    // answering 404 as error.
+    if response.status() == StatusCode::NOT_FOUND {
+        return Err(error_response(StatusCode::NOT_FOUND));
+    }
+
     // If OC replies 2xx, the request is treated as authorized.
     let is_allowed = response.status().is_success();
     trace!(is_allowed, status = ?response.status(), "OC replied");
