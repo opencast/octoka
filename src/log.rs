@@ -117,7 +117,7 @@ pub(crate) fn init(config: &LogConfig) -> Result<()> {
         // Add an empty line separator to see process restarts easier.
         file.write_all(b"\n\n").context("could not write to log file")?;
 
-        Some(subscriber!(file))
+        Some(subscriber!(file).with_ansi(false))
     } else {
         None
     };
