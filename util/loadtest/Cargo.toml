@@ -1,0 +1,9 @@
+[package]
+name = "octoka-loadtest"
+version = "0.0.1"
+edition = "2024"
+publish = false
+
+[dependencies]
+goose = "^0.18.1"
+tokio = "^1.48.0"
