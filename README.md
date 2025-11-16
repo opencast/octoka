@@ -16,7 +16,7 @@ Run it alongside Opencast to enable faster auth-checked file serving, even while
 - Run `octoka run` to actually run the service.
 
 In production, octoka should always be paired with another HTTP server like nginx, to provide TLS and only forward certain requests to octoka.
-TODO: add example nginx config here.
+For information on how to set this up, see [`docs/reverse-proxy.md`](https://github.com/opencast/octoka/blob/main/docs/reverse-proxy.md).
 
 
 ## Features
@@ -25,6 +25,7 @@ TODO: add example nginx config here.
   - Signing algorithms: `EdDSA` (ed25519), `ED256`, `ED384`
   - Fetching public keys from multiple JWKS URLs
   - Key caching & automatic refresh
+- Opencast fallback: if JWT don't grant access, ask Opencast by forwarding request
 - HTTP:
   - Efficient file server (if configured)
   - `X-Accel-Redirect` (if configured)
@@ -64,9 +65,10 @@ Note that octoka has no access to the event's ACL or series information, it only
 This is important to understand and explains why the JWT has to grant access directly.
 
 If the JWT grants access as explained above, the request is treated as authenticated; and as unauthenticated otherwise.
-The response for each case depends on the configuration.
+In the latter case, octoka can just forward the request to Opencast to see what it thinks (see `opencast.fallback` config).
+Octoka's final response depends on the configuration.
 In the authenticated case, either the file is actually served, or it's a 200 with empty body, or it can include an `X-Accel-Redirect` header.
-In the unauthenticated case, 403 is replied (TODO: this will be configurable in the future).
+In the unauthenticated case, either 403 is replied or 204 with an `X-Accel-Redirect`.
 
 
 ## Building
