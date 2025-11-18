@@ -97,6 +97,8 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     }
 
     // Access is allowed: reply 200 and potentially serve file/add headers.
+    trace!(path = req.uri().path(),
+        "allowing access -> responding with {:?}", ctx.config.http.on_allow);
     if ctx.config.http.on_allow == OnAllow::File {
         fs::serve_file(path, &req, &ctx).await
     } else {
@@ -219,6 +221,7 @@ async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<boo
     // TODO: think about `on_allow = "empty"` more! Nginx treats auth_requests
     // answering 404 as error.
     if response.status() == StatusCode::NOT_FOUND {
+        trace!("OC replied 404 -> replying with that");
         return Err(error_response(StatusCode::NOT_FOUND));
     }
 

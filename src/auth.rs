@@ -11,14 +11,14 @@ pub async fn is_allowed(
     ctx: &Context,
 ) -> bool {
     let Some(jwt) = jwt else {
-        debug!("no JWT found in request -> denying access");
+        trace!("no JWT found in request");
         return false;
     };
 
     let res = tokio::select! {
         res = ctx.jwt.decode_and_verify(jwt) => res,
         _ = tokio::time::sleep(JWT_VERIFY_TIMEOUT) => {
-            warn!(?JWT_VERIFY_TIMEOUT, "could not verify JWT in time -> denying access");
+            warn!(?JWT_VERIFY_TIMEOUT, "could not verify JWT in time");
             return false;
         }
     };
@@ -26,7 +26,7 @@ pub async fn is_allowed(
     let info = match res {
         Ok(info) => info,
         Err(e) => {
-            debug!("rejected JWT ({e:?}) -> denying access");
+            debug!("rejected JWT ({e:?})");
             return false;
         }
     };
@@ -40,6 +40,6 @@ pub async fn is_allowed(
         return true;
     }
 
-    debug!("JWT valid but does not grant access to event -> denying access");
+    debug!("JWT valid but does not grant access to event");
     false
 }
