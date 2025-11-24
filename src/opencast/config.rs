@@ -20,9 +20,12 @@ pub struct OpencastConfig {
     ///
     /// - "none": no fallback, Opencast is not contacted.
     /// - "head": an HTTP HEAD request is sent to Opencast, with the same URI
-    ///   and headers as the incoming request. A 2xx status code is interpreted
-    ///   as "allowed", 404 causes octoka to also reply 404, everything else is
-    ///   treated as disallowed.
+    ///   and headers as the incoming request. Octoka's behavior depends on
+    ///   Opencast's response:
+    ///   - 2xx: treat request as allowed
+    ///   - 404: respond with 404
+    ///   - 401: respond with 401, forwarding the www-authenticate header
+    ///   - everything else: treat as forbidden
     /// - "get": like "head", but with HTTP method GET. This exists only for
     ///   older Opencast which had incorrect responses to HEAD requests. If you
     ///   use this, set `x.accel.redirect` in OC, in order to not send the file.

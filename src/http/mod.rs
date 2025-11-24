@@ -214,6 +214,21 @@ async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<boo
         }
     };
 
+    // In case of 401 (with 'www-authenciate' header, which is required by spec),
+    // this is likely a digest auth request and we also reply 401, forwarding
+    // the header. nginx's auth_request has the same behavior.
+    if response.status() == StatusCode::UNAUTHORIZED
+        && let Some(header) = response.headers().get(header::WWW_AUTHENTICATE)
+    {
+        trace!("OC replied 401 -> also replying 401, forwarding OC's www-authenticate header");
+        let out = Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .header(header::WWW_AUTHENTICATE, header)
+            .body(Body::Empty)
+            .unwrap();
+        return Err(out);
+    }
+
     // If OC replies 404, then it doesn't make a lot of sense for use to treat
     // it as 403. For `on_allow = "file"` and `"x-accel-redirect"`, replying
     // with 404 is certainly the correct thing to do.
