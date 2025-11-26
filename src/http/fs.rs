@@ -65,7 +65,7 @@ pub async fn serve_file(
         .header(header::ETAG, &etag);
     add_cors_headers(req, &mut response, &ctx.config.http);
     if let Some(mime) = mime_guess::from_path(&fs_path).first() {
-        response = response.header("Content-Type", mime.to_string());
+        response = response.header(header::CONTENT_TYPE, mime.to_string());
     }
 
     // If the `download=1` parameter is set, we add a header to make browsers
