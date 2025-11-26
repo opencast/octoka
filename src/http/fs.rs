@@ -68,6 +68,14 @@ pub async fn serve_file(
         response = response.header("Content-Type", mime.to_string());
     }
 
+    // If the `download=1` parameter is set, we add a header to make browsers
+    // download a file instead of showing it inline.
+    if form_urlencoded::parse(req.uri().query().unwrap_or("").as_bytes())
+        .any(|(key, value)| key == "download" && value == "1")
+    {
+        response = response.header(header::CONTENT_DISPOSITION, "attachment");
+    }
+
     if is_unmodified(req.headers(), &etag, mtime) {
         return response.status(StatusCode::NOT_MODIFIED).body(Body::Empty).unwrap();
     }
