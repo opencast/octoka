@@ -3,11 +3,10 @@
 octoka is a small HTTP server that can answer [JWT-authenticated](https://docs.opencast.org/develop/admin/#configuration/security.jwt/#standard-oc-schema-for-jwts) requests for Opencast static files.
 Run it alongside Opencast to enable faster auth-checked file serving, even while Opencast is down (e.g. for updates).
 
-> **Note**: octoka is still young and there are no stable releases yet. It is currently being tested and evaluated. Consider it experimental software at the moment.
 
 ## Quick start
 
-- Get the octoka executable [from the releases page](https://github.com/opencast/octoka/releases) or by [building it yourself](#building).
+- Get the octoka executable [from the releases page](https://github.com/opencast/octoka/releases) or [build it yourself](#building).
 - Get the config template [from the releases page](https://github.com/opencast/octoka/releases) or by running `./octoka gen-config-template -o config.toml`.
 - Go through the config and adjust as required (search for "required" to see values you have to set).
 - octoka expects the config at `/etc/octoka/config.toml` or `config.toml` in the working directory.
