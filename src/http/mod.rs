@@ -30,7 +30,7 @@ mod fs;
 pub use self::config::{HttpConfig, JwtSource, OnAllow};
 
 
-const ALLOWED_METHODS: &str = "GET, OPTIONS";
+const ALLOWED_METHODS: &str = "GET, HEAD, OPTIONS";
 
 
 /// Main entry point for a single incoming request
@@ -48,7 +48,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
         return builder.body(Body::Empty).unwrap();
     }
 
-    if req.method() != Method::GET {
+    if req.method() != Method::GET  && req.method() != Method::HEAD {
         return error_response(StatusCode::METHOD_NOT_ALLOWED);
     }
 
@@ -118,6 +118,24 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     }
 }
 
+/// Just calls `handle`, but strips the response body if the method was HEAD.
+///
+/// Dealing with HEAD requests like that is the best for code complexity as we
+/// deal with it at once point. It is not the fastest solution, as `handle` will
+/// perform a few actions that are not necessary for HEAD requests, but
+/// importantly, these are all rather small things. The file is never actually
+/// loaded, `body` is just a reference to the file and actual IO would only
+/// happen when the response is given back to hyper. And opening the file to
+/// load size and metadata is necessary to set header correctly.
+async fn handle_wrapper(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
+    let is_head = req.method() == Method::HEAD;
+    let mut out = handle(req, ctx).await;
+    if is_head {
+        *out.body_mut() = Body::Empty;
+    }
+    out
+}
+
 /// Adds CORS headers IF we allow cors for the request's Origin.
 fn add_cors_headers(
     req: &Request<Incoming>,
@@ -154,9 +172,9 @@ fn add_cors_headers(
             }
         }
 
-        // Require this header to be "GET".
+        // Require this header to be "GET" or "HEAD".
         match req.headers().get(header::ACCESS_CONTROL_REQUEST_METHOD) {
-            Some(h) if h == "GET" => {}
+            Some(h) if h == "GET" || h == "HEAD" => {}
             method => {
                 trace!(?method, "CORS denied due to disallowed method");
                 return;
@@ -331,7 +349,7 @@ pub async fn serve(ctx: Context) -> Result<()> {
                 let io = TokioIo::new(stream);
                 let ctx = Arc::clone(&ctx);
                 let conn = http.serve_connection(io, service_fn(move |req| {
-                    handle_internal_errors(handle(req, Arc::clone(&ctx)))
+                    handle_internal_errors(handle_wrapper(req, Arc::clone(&ctx)))
                 }));
                 let fut = graceful.watch(conn);
                 tokio::spawn(async move {
