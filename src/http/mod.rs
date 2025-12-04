@@ -278,7 +278,7 @@ impl JwtSource {
                 let value = req.headers().get(name)?;
                 let bytes = value.as_bytes();
                 let stripped = match prefix {
-                    Some(prefix) => bytes.strip_prefix(prefix.as_bytes()).unwrap_or(bytes),
+                    Some(prefix) => bytes.strip_prefix(prefix.as_bytes())?,
                     None => bytes,
                 };
                 match str::from_utf8(stripped) {

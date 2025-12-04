@@ -41,7 +41,8 @@ pub struct HttpConfig {
     ///   is used.
     /// - `{ source = "header", name = "Authorization", prefix = "Bearer " }`:
     ///   from first HTTP header with the given name. The optional `prefix` is
-    ///   stripped from the header value.
+    ///   stripped from the header value. If the header value does not start
+    ///   with the given prefix, it is ignored.
     #[config(
         default = [
             { "source": "header", "name": "Authorization", "prefix": "Bearer " },
