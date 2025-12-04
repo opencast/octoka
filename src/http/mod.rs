@@ -206,9 +206,16 @@ async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<boo
     trace!(?uri, "asking OC for auth-info");
 
 
+    let is_digest_auth = orig_req.headers()
+        .get(header::AUTHORIZATION)
+        .is_some_and(|h| h.as_bytes().starts_with(b"Digest"));
     let mut req = Request::builder()
         .uri(uri)
         .method(match ctx.config.opencast.fallback {
+            // If this request uses Digest auth, we must keep the original method,
+            // as that is part of the `response` hash calculation of the Digest
+            // protocol. `orig_req.method()` is always either GET or HEAD.
+            _ if is_digest_auth => orig_req.method().clone(),
             FallbackMode::Head => Method::HEAD,
             FallbackMode::Get => Method::GET,
             FallbackMode::None => unreachable!(),
