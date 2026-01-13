@@ -196,6 +196,19 @@ fn add_cors_headers(
         // would make this caching unsafe.
         (header::ACCESS_CONTROL_MAX_AGE, HeaderValue::from_static("86400")),
     ]);
+
+    // If we set the `Access-Control-Allow-Origin` depending on the `Origin`
+    // header, then we also must set the `Vary` header here. Otherwise browsers
+    // are allowed to cache one response (including the `Access-Control-Allow-Origin`
+    // header) for one specific origin and use it for requests done from a different
+    // origin. And then the browser rejects it, throwing a CORS error, because the
+    // header does not match the origin. Setting this header means the browser
+    // needs to include the origin in the cache key. Also see:
+    //
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Access-Control-Allow-Origin#cors_and_caching
+    if config.cors_allowed_origins.len() > 1 {
+        response.headers_mut().unwrap().append(header::VARY, HeaderValue::from_static("Origin"));
+    }
 }
 
 /// Sends a HEAD request to Opencast with the headers and path/query of `req`.
