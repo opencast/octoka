@@ -3,6 +3,7 @@ name = "octoka"
 version = "1.2.0"
 edition = "2024"
 publish = false
+rust-version = "1.88"
 
 [dependencies]
 anyhow = "1.0.96"
