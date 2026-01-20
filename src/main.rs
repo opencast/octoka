@@ -1,15 +1,15 @@
 use std::{
     fs,
     io::{self, Write},
-    path::PathBuf,
 };
 
 use clap::Parser as _;
 
-use crate::{config::Config, prelude::*};
+use crate::{cli::{Cli, Command}, config::Config, prelude::*};
 
 
 mod auth;
+mod cli;
 mod config;
 mod http;
 mod jwt;
@@ -61,36 +61,7 @@ fn load_config_and_init_logger(cli: &Cli) -> Result<Config> {
     Ok(config)
 }
 
-#[derive(clap::Parser)]
-#[command(version, about)]
-struct Cli {
-    #[clap(subcommand)]
-    cmd: Command,
-
-    /// Specifies config file location. Default locations are: 'config.toml' and
-    /// '/etc/octoka/config.toml'. Can also be set via env `OCTOKA_CONFIG_PATH`.
-    #[clap(long)]
-    config: Option<PathBuf>,
-}
-
-#[derive(Debug, clap::Parser)]
-enum Command {
-    /// Starts the HTTP server.
-    Run,
-
-    /// Checks config, paths, URLs and other stuff. Useful to run before
-    /// restarting the main server after a config update.
-    Check,
-
-    /// Outputs a template of the configuration, including all config options
-    /// with descriptions, great as a starting point.
-    GenConfigTemplate {
-        /// File to write it to. If unspecified, written to stdout.
-        #[clap(short, long)]
-        out: Option<PathBuf>,
-    },
-}
-
+/// Runs the `check` subcommand.
 async fn run_check(cli: &Cli) -> Result<()> {
     let config = load_config_and_init_logger(cli)
         .context("failed to load config: cannot proceed with `check` command")?;
