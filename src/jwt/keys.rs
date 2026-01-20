@@ -31,6 +31,7 @@ pub(super) struct Key {
     pub(super) source: Arc<KeySource>,
 }
 
+/// A URL to a JWKS, with some metadata.
 #[derive(Debug, Clone)]
 pub(super) struct KeySource {
     pub(super) last_fetch: Instant,
@@ -148,10 +149,37 @@ impl Keys {
 }
 
 
+/// Responsible for fetching, updating, and removing keys.
+///
+/// This is somewhat non-trivial as we want to refresh some keys in response to
+/// incoming requests, but want to make incoming requests very fast to reply to
+/// and protect against DOS attackes that try to force us refetching JWKS all
+/// the time. We also don't want to have two fetches for the same URL at the
+/// same time. If a second request needs to refresh the same source, that
+/// should just wait for the refresh triggered by the first refresh to finish.
+///
+/// The main logic is this:
+/// - `refresh()` refreshes all given sources. Request handlers (i.e.
+///   `verify_signature`) only calls this with stale sources. That already
+///   throttles how many refreshes we do.
+/// - `backup_refresh()` is like `refresh()` but throttled. It is called by
+///   `verify_signature` also with non-stale sources.
+/// - `background_refresh()` just runs in a background thread, just refreshing
+///   sources shortly before they get stale.
 pub(super) struct KeyManager {
     keys: ArcSwap<Keys>,
     http_client: SimpleHttpClient,
+
+    /// For each JWKS source, we have a guard to make sure only one fetch for
+    /// that URL happens at any given time. This hashmap always contains one
+    /// entry per JWKS source in the config and never changes size.
     fetch_guards: HashMap<JwksUrl, Semaphore>,
+
+    /// Backup refreshes are those that happen in response to an incoming
+    /// request, when no key is found to verify the JWT with. This is used to
+    /// throttle backup refreshes, to avoid a DOS attack where an attacker would
+    /// send lots of unverifiable JWTs in order or us to hammer the JWKS
+    /// endpoint. See `BACKUP_REFRESH_RATE_LIMIT`.
     last_backup_refresh: RwLock<Instant>,
 }
 
@@ -233,7 +261,7 @@ impl KeyManager {
                 });
             }
 
-            // If there are currently not permits, that means another task is
+            // If there are currently no permits, that means another task is
             // currently fetching this URL. In that case we do nothing, except
             // to acquiring a permit and immediately discarding it. This makes
             // sure that this function returns only when the source has been
@@ -248,7 +276,8 @@ impl KeyManager {
     }
 
     /// Refreshes all given sources, returning once all fetch operations are
-    /// done and the results are written into `self.keys`.
+    /// done and the results are written into `self.keys`. Not throttled, so
+    /// only stale sources should be passed (which then provides throttling).
     pub(super) async fn refresh<'a>(
         self: &Arc<Self>,
         sources: impl IntoIterator<Item = &'a JwksUrl>,
@@ -264,6 +293,8 @@ impl KeyManager {
         join_all(fetch_tasks).await;
     }
 
+    /// Like `refresh`, but throttled via `BACKUP_REFRESH_RATE_LIMIT`. Therefore
+    /// fine to call with non-stale sources.
     pub(super) async fn backup_refresh<'a>(
         self: &Arc<Self>,
         sources: impl IntoIterator<Item = &'a JwksUrl>,
@@ -301,6 +332,7 @@ impl KeyManager {
         }
     }
 
+    /// Runs in a background thread and refreshes all sources just in time.
     pub(super) async fn background_refresh(self: &Arc<Self>, config: &JwtConfig) {
         loop {
             // Find source that is expiring next.

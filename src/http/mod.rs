@@ -48,7 +48,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
         return builder.body(Body::Empty).unwrap();
     }
 
-    if req.method() != Method::GET  && req.method() != Method::HEAD {
+    if req.method() != Method::GET && req.method() != Method::HEAD {
         return error_response(StatusCode::METHOD_NOT_ALLOWED);
     }
 
