@@ -5,18 +5,8 @@ use std::{
 
 use clap::Parser as _;
 
-use crate::{cli::{Cli, Command}, config::Config, prelude::*};
+use octoka::{cli::{Cli, Command}, config::{self, Config}, jwt, log, prelude::*};
 
-
-mod auth;
-mod cli;
-mod config;
-mod http;
-mod jwt;
-mod log;
-mod opencast;
-mod prelude;
-mod util;
 
 #[cfg(not(target_env = "msvc"))]
 #[global_allocator]
@@ -41,8 +31,7 @@ async fn main() -> Result<()> {
 
         Command::Run => {
             let config = load_config_and_init_logger(&cli)?;
-            let ctx = http::Context::new(config).await?;
-            http::serve(ctx).await?;
+            octoka::run_http_server(config).await?;
         }
     }
 
@@ -54,7 +43,7 @@ fn load_config_and_init_logger(cli: &Cli) -> Result<Config> {
         None => config::load()?,
         Some(path) => config::load_from(path)?,
     };
-    log::init(&config.log).context("failed to setup logger")?;
+    log::init(&config.log, false).context("failed to setup logger")?;
     info!("Loaded config");
     info!("Initialized logger");
     trace!("Configuration: {config:#?}");

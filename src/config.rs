@@ -171,9 +171,9 @@ where
 
 #[derive(Clone, Deserialize)]
 #[serde(try_from = "String")]
-pub(crate) struct HttpHost {
-    pub(crate) scheme: hyper::http::uri::Scheme,
-    pub(crate) authority: hyper::http::uri::Authority,
+pub struct HttpHost {
+    pub scheme: hyper::http::uri::Scheme,
+    pub authority: hyper::http::uri::Authority,
 }
 
 impl HttpHost {

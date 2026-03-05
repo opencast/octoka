@@ -1,5 +1,5 @@
 use std::{
-    borrow::Cow, convert::Infallible, error::Error, net::SocketAddr, panic::AssertUnwindSafe,
+    borrow::Cow, convert::Infallible, error::Error, panic::AssertUnwindSafe,
     pin::Pin, sync::Arc, task::Poll, time::Duration,
 };
 
@@ -347,13 +347,16 @@ impl Context {
     }
 }
 
+pub async fn serve(ctx: Context) -> Result<()> {
+    let listener = TcpListener::bind(ctx.config.http.socket_addr()).await?;
+    serve_on(ctx, listener).await?;
+    Ok(())
+}
+
 /// Main entry point: starting the HTTP server.
 ///
 /// This is mainly plumbing code and does not contain much interesting logic.
-pub async fn serve(ctx: Context) -> Result<()> {
-    let addr = SocketAddr::from((ctx.config.http.address, ctx.config.http.port));
-
-    let listener = TcpListener::bind(addr).await?;
+pub async fn serve_on(ctx: Context, listener: TcpListener) -> Result<()> {
     let graceful = hyper_util::server::graceful::GracefulShutdown::new();
     let mut signal = std::pin::pin!(shutdown_signal());
 
@@ -362,7 +365,7 @@ pub async fn serve(ctx: Context) -> Result<()> {
     let shutdown_timeout = ctx.config.http.shutdown_timeout;
     let ctx = Arc::new(ctx);
 
-    info!("Listening on http://{}", addr);
+    info!("Listening on http://{}", listener.local_addr()?);
     loop {
         tokio::select! {
             Ok((stream, _addr)) = listener.accept() => {

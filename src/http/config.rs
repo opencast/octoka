@@ -1,4 +1,4 @@
-use std::{net::IpAddr, time::Duration};
+use std::{net::{IpAddr, SocketAddr}, time::Duration};
 
 use anyhow::anyhow;
 use serde::Deserialize;
@@ -65,6 +65,11 @@ pub struct HttpConfig {
     pub shutdown_timeout: Duration,
 }
 
+impl HttpConfig {
+    pub fn socket_addr(&self) -> SocketAddr {
+        SocketAddr::from((self.address, self.port))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
 #[serde(try_from = "String")]
