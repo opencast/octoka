@@ -236,6 +236,17 @@ async fn ps256() -> Result<()> {
 }
 
 #[tokio::test]
+async fn alg_none() -> Result<()> {
+    let setup = setup(&["ed25519.json"]).await?;
+
+    // Header: { "alg": "none", "typ": "JWT" }
+    let jwt = format!("eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.{PAYLOAD_ADMIN}.");
+    assert_status!(setup.fetch(&jwt), StatusCode::FORBIDDEN);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn time_validations() -> Result<()> {
     let setup = setup(&["ed25519.json"]).await?;
 
