@@ -155,9 +155,54 @@ async fn time_validations() -> Result<()> {
 }
 
 
+#[tokio::test]
+async fn oc_claims() -> Result<()> {
+    let setup = setup(&["ed25519.json"]).await?;
+
+    // Just a non admin role: `{ "exp": 4012345678, "roles": ["ROLE_USER"] }`
+    let jwt = format!("{HEADER_EDDSA}.eyJleHAiOjQwMTIzNDU2NzgsInJvbGVzIjpbIlJPTEVfVVNFUiJdfQ.\
+        _wHBNPRKhR2xSKRYwyXCRLEUQ0JCrnhUfFn380YwsqSLydxY0qHzxWkUB5CkCsrMLysorkyKxYHx-M9NyyGRCg");
+    assert_status!(setup.fetch(&jwt), StatusCode::FORBIDDEN);
+
+    // Admin role and other roles: { "exp": 4012345678, "roles": ["ROLE_USER", "ROLE_ADMIN"] }
+    let jwt = format!("{HEADER_EDDSA}.eyJleHAiOjQwMTIzNDU2NzgsInJvbGVzIjpbIlJPTEVfVVNFUiIsIlJPTEVfQURNSU4iXX0.\
+        GATALWsFAp1wyaOm-P3wQC5mTyj1dp5zIdcFHFWIP4_JUebMHgKMttKrmqJ6EUXh_eNq6_4MTeZeEAodY9BeAA");
+    assert_status!(setup.fetch(&jwt), StatusCode::NO_CONTENT);
+
+    // `oc` claim with correct ID: { "exp": 4012345678, "oc": { "e:abc123": ["read"] } }
+    let jwt = format!("{HEADER_EDDSA}.eyJleHAiOjQwMTIzNDU2NzgsIm9jIjp7ImU6YWJjMTIzIjpbInJlYWQiXX19.\
+        IxELHyc6u-G56-FAjoyZJdRL-X0i4VFHWsm0SqJZHFZ4Ff2c6dls_UkeAV1dE4bPBplyWRa9SnyetvUSx-DbBg");
+    assert_status!(setup.fetch(&jwt), StatusCode::NO_CONTENT);
+
+    // `oc` claim with incorrect ID: { "exp": 4012345678, "oc": { "e:ffff": ["read"] } }
+    let jwt = format!("{HEADER_EDDSA}.eyJleHAiOjQwMTIzNDU2NzgsIm9jIjp7ImU6ZmZmZiI6WyJyZWFkIl19fQ.\
+        jJUzVbnuKpCysCduTZyqi7_IPIpjE4Z-kyP7C-gGk5XTPg5v8cmViWjkUUNr1YySOETrbtU6xgHPYktAgTasBw");
+    assert_status!(setup.fetch(&jwt), StatusCode::FORBIDDEN);
+
+    // `oc` claim with incorrect and correct ID: { "exp": 4012345678, "oc": { "e:ffff": ["read"], "e:abc123": ["read"] } }
+    let jwt = format!("{HEADER_EDDSA}.eyJleHAiOjQwMTIzNDU2NzgsIm9jIjp7ImU6ZmZmZiI6WyJyZWFkIl0sImU6YWJjMTIzIjpbInJlYWQiXX19.\
+        OKXJJJPztNijrkLQSJ67isUZo9ktGJkotMlidHe6Foo1yHtcEyA9967XljohpVZKPgtQf9Q7yJ-pbM8Eto2WAQ");
+    assert_status!(setup.fetch(&jwt), StatusCode::NO_CONTENT);
+
+    // `oc` claim wrong action: { "exp": 4012345678, "oc": { "e:abc123": ["banana"] } }
+    let jwt = format!("{HEADER_EDDSA}.eyJleHAiOjQwMTIzNDU2NzgsIm9jIjp7ImU6YWJjMTIzIjpbImJhbmFuYSJdfX0.\
+        3mUEQlYzOSAEoIhjbxl-hZhZLKmaf5_5cqjnXwFs5SSiSBcad5BotRsNVn1yETRwuDwQWCKSbXnaqjweWW7BDg");
+    assert_status!(setup.fetch(&jwt), StatusCode::FORBIDDEN);
+
+    // `oc` claim write action only: { "exp": 4012345678, "oc": { "e:abc123": ["write"] } }
+    let jwt = format!("{HEADER_EDDSA}.eyJleHAiOjQwMTIzNDU2NzgsIm9jIjp7ImU6YWJjMTIzIjpbIndyaXRlIl19fQ.\
+        G6por97AZb7upyCE5W-e5YWFBwzNG8mNiYYa9t7U4UOA_bd-tnPlqrbX8wQ1IgoG4pUHfApnK5wM_7YPPaC6AA");
+    assert_status!(setup.fetch(&jwt), StatusCode::FORBIDDEN);
+
+    // No related claim: { "exp": 4012345678, "event": "abc123" }
+    let jwt = format!("{HEADER_EDDSA}.eyJleHAiOjQwMTIzNDU2NzgsInN1YiI6ImFiYzEyMyJ9.\
+        tAKXmXwSodREEkm2c7q6ZRI8X0WRWa3a3YPsd51x3HLBgTwxIDkzfjNqRzlcWUafQ8w1Bv4BSdBmVZPz_AwgCw");
+    assert_status!(setup.fetch(&jwt), StatusCode::FORBIDDEN);
+
+    Ok(())
+}
+
 // TODO:
-// - oc claim instead of admin
-// - no correct claim, wrong event
 // - kid: key has it, jwt has it, combinations
 // - incorrect alg in JWK
 // - RSA key: with alg, without alg
