@@ -1,0 +1,9 @@
+{
+  "keys": [{
+    "kty": "EC",
+    "alg": "ES256",
+    "crv": "P-256",
+    "x": "cyt2TaJtou5kqoawBZa_w49CiYcvQt6cKxFd8aNEG_o",
+    "y": "FCzIaLP_4G64f1iKdqg7RsDHkW9Cmaz8QukZ-7UoMLQ"
+  }]
+}
