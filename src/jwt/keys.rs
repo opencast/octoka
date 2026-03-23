@@ -1,15 +1,16 @@
 //! Key management, fetching and refreshing.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::{HashMap, HashSet}, sync::Arc, time::Duration};
 
 use arc_swap::ArcSwap;
 use futures::future::join_all;
+use jwtea::SignatureValid;
 use tokio::{
     sync::{RwLock, Semaphore, TryAcquireError},
     time::Instant,
 };
 
-use super::{JwksUrl, JwtConfig, Kid, crypto, decode::JwtError, jwks};
+use super::{Context, JwksUrl, JwtConfig, Kid, jwks};
 use crate::{
     prelude::*,
     util::{self, SimpleHttpClient},
@@ -27,7 +28,7 @@ const BACKUP_REFRESH_RATE_LIMIT: Duration = Duration::from_secs(15);
 /// A single cryptographic key fetched from a JWKS, with some metadata.
 #[derive(Debug, Clone)]
 pub(super) struct Key {
-    pub(super) key: crypto::Key,
+    pub(super) key: jwtea::VerifyingKey,
     pub(super) source: Arc<KeySource>,
 }
 
@@ -91,19 +92,19 @@ impl Keys {
     pub(super) fn keys_for(
         &self,
         kid: Option<&str>,
-        alg: crypto::Algo,
-    ) -> Result<impl Iterator<Item = (&Key, bool)>, JwtError> {
+        alg: &jwtea::Alg<'_>,
+    ) -> Result<impl Iterator<Item = (&Key, bool)>, jwtea::Error> {
         let perfect_match = kid.and_then(|kid| self.with_id.get(kid));
 
-        if let Some(key) = perfect_match && key.key.algo() != alg {
-            return Err(JwtError::AlgoMismatch);
+        if let Some(key) = perfect_match && !key.key.supports_alg(alg) {
+            return Err(jwtea::Error::AlgoMismatch);
         }
 
         let without_ids = perfect_match.is_none().then(|| self.without_id.iter());
         let with_ids = kid.is_none().then(|| self.with_id.values());
         let rest = without_ids.into_iter().flatten()
             .chain(with_ids.into_iter().flatten())
-            .filter(move |key| key.key.algo() == alg)
+            .filter(move |key| key.key.supports_alg(alg))
             .map(|key| (key, false));
 
         Ok(perfect_match.into_iter().map(|key| (key, true)).chain(rest))
@@ -361,6 +362,108 @@ impl KeyManager {
 
             debug!("background-refreshing some keys");
             self.refresh(to_be_refreshed).await;
+        }
+    }
+}
+
+
+// This implements the logic to verify a JWT signature, by potentially fetching
+// keys on the fly.
+impl<H> jwtea::SignatureVerifier<H> for Context {
+    async fn verify(
+        &self,
+        header: &jwtea::Header<'_, H>,
+        message: &str,
+        signature: &[u8],
+    ) -> std::result::Result<SignatureValid, jwtea::Error> {
+        let alg = &header.alg;
+        let kid = header.kid.as_deref();
+        trace!(%alg, ?kid, message, signature, "Verifying signature...");
+        // let algo = crypto::Algo::from_str(alg).ok_or(JwtError::UnsupportedAlg)?;
+        let mut tried_some_keys = false;
+
+        // Tries to verify the given key. Early exits on success. If `kid_match`
+        // is true, an error is returned on failure, otherwise failure is ignored.
+        macro_rules! try_verify {
+            ($key:expr, $kid_match:expr) => {
+                tried_some_keys = true;
+                let key = $key;
+                match key.verify(header, message, &signature) {
+                    Ok(proof) => {
+                        trace!(?key, "Key successfully verified signature");
+                        return Ok(proof);
+                    }
+                    Err(_) => {
+                        trace!(?key, "Key could not verify signature");
+                        if ($kid_match) {
+                            return Err(jwtea::Error::InvalidSignature);
+                        }
+                    }
+                }
+            };
+        }
+
+
+        // First: check all non-stale keys. This is a fast pass to make sure we
+        // don't do any unneeded expensive operation.
+        let keys = self.keys().load();
+        let mut stale_sources = HashSet::new();
+        for (key, kid_match) in keys.keys_for(kid, alg)? {
+            if key.source.is_stale(&self.config) {
+                stale_sources.insert(&key.source.url);
+            } else {
+                try_verify!(&key.key, kid_match);
+            }
+        }
+
+        // Next: if we found any stale sources, we refresh them and try those
+        // keys now.
+        if !stale_sources.is_empty() {
+            // Refresh stale sources/keys
+            self.key_manager
+                .refresh(stale_sources.iter().copied())
+                .await;
+
+            // Try all keys that were just refreshed
+            let keys = self.keys().load();
+            for (key, kid_match) in keys.keys_for(kid, alg)? {
+                if stale_sources.contains(&key.source.url) {
+                    try_verify!(&key.key, kid_match);
+                }
+            }
+        }
+
+        // Finally: we have gone through all keys that we know, but couldn't
+        // verify the JWT. It could be that a source we consider fresh rotated a
+        // key. To not show failures in this case, we do refetch everything that
+        // hasn't been refetched above. This is rate limited however, so that
+        // an attacker cannot force this service to always refetch.
+        if stale_sources.len() == self.config.trusted_keys.len() {
+            trace!("Already just refetched all sources -> no backup refetch");
+        } else {
+            let not_refreshed_yet = self
+                .config
+                .trusted_keys
+                .iter()
+                .filter(|url| !stale_sources.contains(url));
+            let try_again = self.key_manager.backup_refresh(not_refreshed_yet).await;
+
+            if try_again {
+                // Try all keys that were just refreshed
+                let keys = self.keys().load();
+                for (key, kid_match) in keys.keys_for(kid, alg)? {
+                    if !stale_sources.contains(&key.source.url) {
+                        try_verify!(&key.key, kid_match);
+                    }
+                }
+            }
+        }
+
+        // After all that, the signature truly cannot be verified
+        if tried_some_keys {
+            Err(jwtea::Error::InvalidSignature)
+        } else {
+            Err(jwtea::Error::NoSuitableKey)
         }
     }
 }

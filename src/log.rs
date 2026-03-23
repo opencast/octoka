@@ -13,7 +13,7 @@ use crate::prelude::*;
 
 
 #[derive(Debug, confique::Config)]
-pub(crate) struct LogConfig {
+pub struct LogConfig {
     /// Specifies what log messages to emit, based on the module path and log level.
     ///
     /// This is a map where the key specifies a module path prefix, and the
@@ -35,19 +35,19 @@ pub(crate) struct LogConfig {
     ///    filters."octoka::http::fs" = "off"
     ///    filters.hyper = "debug"
     #[config(default = { "octoka": "info" })]
-    pub(crate) filters: Filters,
+    pub filters: Filters,
 
     /// If this is set, log messages are also written to this file.
-    pub(crate) file: Option<PathBuf>,
+    pub file: Option<PathBuf>,
 
     /// If this is set to `false`, log messages are not written to stdout.
     #[config(default = true)]
-    pub(crate) stdout: bool,
+    pub stdout: bool,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(try_from = "HashMap<String, String>")]
-pub(crate) struct Filters(HashMap<String, LevelFilter>);
+pub struct Filters(HashMap<String, LevelFilter>);
 
 impl TryFrom<HashMap<String, String>> for Filters {
     type Error = String;
@@ -74,7 +74,7 @@ fn parse_level_filter(s: &str) -> Result<LevelFilter, String> {
     }
 }
 
-pub(crate) fn init(config: &LogConfig) -> Result<()> {
+pub fn init(config: &LogConfig, test: bool) -> Result<()> {
     let filter = {
         let filters = config.filters.0.clone();
         let max_level = filters.values().max().copied().unwrap_or(LevelFilter::OFF);
@@ -122,11 +122,18 @@ pub(crate) fn init(config: &LogConfig) -> Result<()> {
         None
     };
 
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(file_output)
-        .with(stdout_output)
-        .init();
+    if test {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(tracing_subscriber::fmt::layer().with_test_writer())
+            .try_init()?;
+    } else {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(file_output)
+            .with(stdout_output)
+            .try_init()?;
+    }
 
     Ok(())
 }
