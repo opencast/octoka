@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    # Disable version updates
+    open-pull-requests-limit: 0
+
+  # Disable for loadtest
+  - package-ecosystem: cargo
+    directory: "/util/loadtest"
+    schedule:
+      interval: "yearly"
+    ignore:
+      - dependency-name: "*"
