@@ -41,6 +41,7 @@ elliptic-curve = { version = "0.13.8", features = ["jwk"] }
 ed448-goldilocks = "0.14.0-pre.2"
 pkcs8 = { version = "0.11.0-rc.6", features = ["pem"] }
 reqwest = "0.13.2"
+tempfile = "3.27.0"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 tikv-jemallocator = "0.6"

@@ -36,7 +36,10 @@ pub async fn serve_file(
         downloads_path.join(path.without_prefix()).canonicalize(),
         "canonicalizing path",
     );
-    let event_dir = downloads_path.join(path.rel_event_dir());
+    let event_dir = handle_io_err!(
+        downloads_path.join(path.rel_event_dir()).canonicalize(),
+        "canonicalizing event directory",
+    );
     if !fs_path.starts_with(&event_dir) {
         warn!(
             path = path.full_path(),
