@@ -37,10 +37,14 @@ impl<'a> PathParts<'a> {
         }
 
         // Check if it starts with any of the configured prefixes and split
-        // `path` into prefix part and rest.
+        // `path` into prefix part and rest. The prefix must be followed by a
+        // slash, otherwise `/staticfoo/...` would match the prefix `static`.
+        // Prefixes are never empty, as checked by the config validation.
         let prefix = path_prefixes.iter()
             .map(|prefix| prefix.trim_matches('/'))
-            .find(|prefix| path[1..].starts_with(prefix))?;
+            .find(|prefix| {
+                path[1..].strip_prefix(prefix).is_some_and(|rest| rest.starts_with('/'))
+            })?;
         let start_org = u16::try_from(prefix.len()).unwrap() + 1;
 
         // Returns the index of the next slash after the slash at `start`. Fails

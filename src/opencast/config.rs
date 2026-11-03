@@ -53,6 +53,9 @@ fn validate_path_prefixes(paths: &Vec<String>) -> Result<(), &'static str> {
 
     for path in paths {
         crate::config::validate_url_path(path)?;
+        if path.trim_matches('/').is_empty() {
+            return Err("prefix must not be empty");
+        }
     }
 
     Ok(())
