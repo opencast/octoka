@@ -44,7 +44,8 @@ pub async fn serve_file(
         "canonicalizing path",
     );
     let event_dir = downloads_path.join(path.rel_event_dir());
-    if !fs_path.starts_with(&event_dir) {
+    // Double check necessary in case `path.rel_event_dir()` is absolute.
+    if !fs_path.starts_with(&event_dir) || !event_dir.starts_with(downloads_path) {
         warn!(
             path = path.full_path(),
             "Directory traversal attack detected, responding 400 Bad Request",
