@@ -43,13 +43,27 @@ impl<'a> PathParts<'a> {
             .find(|prefix| path[1..].starts_with(prefix))?;
         let start_org = u16::try_from(prefix.len()).unwrap() + 1;
 
-        let find_after = |start: u16| path[start as usize + 1..]
-            .find('/')
-            .map(|pos| u16::try_from(pos).unwrap() + start + 1);
+        // Returns the index of the next slash after the slash at `start`. Fails
+        // if there is no further slash, or if the segment in between is empty.
+        // Empty segments must be rejected: an empty org would make
+        // `without_prefix()` start with a slash, i.e. an absolute path.
+        let find_after = |start: u16| {
+            let segment_start = start as usize + 1;
+            let pos = path[segment_start..].find('/')?;
+            if pos == 0 {
+                return None;
+            }
+            u16::try_from(segment_start + pos).ok()
+        };
 
         let start_channel = find_after(start_org)?;
         let start_event_id = find_after(start_channel)?;
         let start_suffix = find_after(start_event_id)?;
+
+        // The suffix must not be empty either.
+        if start_suffix as usize + 1 >= path.len() {
+            return None;
+        }
 
         Some(Self { path, start_org, start_channel, start_event_id, start_suffix })
     }
