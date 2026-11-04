@@ -79,6 +79,13 @@ impl<'a> PathParts<'a> {
             }
         }
 
+        // Reject path segments "." and "..". In theory we could normalize the
+        // path instead, but no legitimate client sends these. Browsers always
+        // normalize the path themselves.
+        if rest.split('/').any(|seg| seg == "." || seg == "..") {
+            return None;
+        }
+
         // Returns the index of the next slash after the slash at `start`. Fails
         // if there is no further slash, or if the segment in between is empty.
         // Empty segments must be rejected: an empty org would make
@@ -534,5 +541,53 @@ mod tests {
     fn encoded_prefix_does_not_match() {
         assert_no_parse!("/st%61tic/org/ch/ev/file", ["/static"]);
         assert_no_parse!("/%73tatic/org/ch/ev/file", ["/static"]);
+    }
+
+    /// Dot segments are rejected everywhere, literal or percent-encoded. With
+    /// nginx `auth_request`, octoka judges the raw path while nginx serves the
+    /// normalized one, so resolving these would let a token for one event
+    /// reach another event's files.
+    #[test]
+    fn rejects_dot_segments() {
+        let paths = [
+            // In the suffix, where it matters most.
+            "/static/org/ch/ev/../other/file",
+            "/static/org/ch/ev/sub/../../other/file",
+            "/static/org/ch/ev/./file",
+            "/static/org/ch/ev/file/.",
+            "/static/org/ch/ev/file/..",
+            // In the other segments.
+            "/static/../ch/ev/x/file",
+            "/static/org/../ev/x/file",
+            "/static/org/ch/../x/file",
+            "/static/./ch/ev/file",
+            "/static/org/ch/./file",
+            // Percent-encoded variants.
+            "/static/org/ch/ev/%2e%2e/other/file",
+            "/static/org/ch/ev/%2E%2E/other/file",
+            "/static/org/ch/ev/.%2e/other/file",
+            "/static/org/ch/ev/%2e./other/file",
+            "/static/org/ch/ev/%2e/file",
+            "/static/org/ch/%2e%2e/x/file",
+        ];
+        for path in paths {
+            assert_no_parse!(path, ["/static"]);
+        }
+    }
+
+    /// Only exact `.` and `..` segments are dot segments. Names that merely
+    /// contain dots are fine.
+    #[test]
+    fn dots_inside_names_are_fine() {
+        assert_path_parse!("/static/o.rg/.ch/ev../.../a..b/.hidden", ["/static"], {
+            prefix: "static",
+            org: "o.rg",
+            channel: ".ch",
+            event_id: "ev..",
+            suffix: ".../a..b/.hidden",
+            without_prefix_raw: "o.rg/.ch/ev../.../a..b/.hidden",
+            without_prefix_decoded: "o.rg/.ch/ev../.../a..b/.hidden",
+            rel_event_dir: "o.rg/.ch/ev..",
+        });
     }
 }
