@@ -1405,6 +1405,7 @@ dependencies = [
  "p256",
  "p384",
  "pem-rfc7468 0.7.0",
+ "percent-encoding",
  "pkcs8 0.11.0",
  "reqwest",
  "serde",

@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 
 use anyhow::ensure;
 use serde::Deserialize;
@@ -53,6 +53,13 @@ fn validate_path_prefixes(paths: &Vec<String>) -> Result<(), &'static str> {
 
     for path in paths {
         crate::config::validate_url_path(path)?;
+        if path.trim_matches('/').is_empty() {
+            return Err("prefix must not be empty");
+        }
+        match percent_encoding::percent_decode_str(path).decode_utf8() {
+            Ok(Cow::Borrowed(_)) => {}
+            _ => return Err("prefix must not contain percent-encoded characters"),
+        }
     }
 
     Ok(())
