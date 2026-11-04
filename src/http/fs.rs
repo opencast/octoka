@@ -30,6 +30,13 @@ pub async fn serve_file(
     // This is checked by `Config::validate`
     let downloads_path = ctx.config.opencast.downloads_path.as_ref()
         .expect("no downloads_path despite `on_allow = \"file\"`");
+    let downloads_path = match downloads_path.canonicalize() {
+        Ok(p) => p,
+        Err(e) => {
+            error!("could not canonicalize `opencast.downloads_path` (does it exist?): {e}");
+            return super::error_response(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
 
     // Join, resolve and canonicalize path. Check for path traversal attacks.
     let fs_path = handle_io_err!(

@@ -3,6 +3,7 @@ use std::{
     io::{self, Write},
 };
 
+use anyhow::ensure;
 use clap::Parser as _;
 
 use octoka::{cli::{Cli, Command}, config::{self, Config}, jwt, log, prelude::*};
@@ -31,6 +32,7 @@ async fn main() -> Result<()> {
 
         Command::Run => {
             let config = load_config_and_init_logger(&cli)?;
+            config.opencast.check_downloads_path()?;
             octoka::run_http_server(config).await?;
         }
     }
@@ -66,11 +68,21 @@ async fn run_check(cli: &Cli) -> Result<()> {
         }
     }
 
+    let downloads_path_check = match &config.opencast.downloads_path {
+        None => Ok(()),
+        Some(path) => path.canonicalize()
+            .context("failed to canonicalize downloads_path")
+            .and_then(|path| {
+                ensure!(path.is_dir(), "downloads_path is not a directory");
+                Ok(())
+            })
+    };
     let jwks_checks = jwt::run_check(&config.jwt).await;
 
     println!();
     println!();
     print_outcome("Configuration", Ok(()));
+    print_outcome("opencast.downloads_path", downloads_path_check);
     for (url, outcome) in jwks_checks {
         print_outcome(&format!("Fetch '{url}'"), outcome);
     }
