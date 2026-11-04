@@ -1,8 +1,9 @@
 use std::path::PathBuf;
 
+use anyhow::ensure;
 use serde::Deserialize;
 
-use crate::config::HttpHost;
+use crate::{config::HttpHost, prelude::*};
 
 #[derive(Debug, confique::Config)]
 pub struct OpencastConfig {
@@ -63,4 +64,24 @@ pub enum FallbackMode {
     None,
     Head,
     Get,
+}
+
+impl OpencastConfig {
+    /// Makes sure that `downloads_path` is a directory and canonicalizes.
+    /// However, if it's missing, that just produces a warning and `Ok(_)`.
+    pub fn check_downloads_path(&self) -> Result<()> {
+        if let Some(path) = &self.downloads_path {
+            match path.canonicalize() {
+                Ok(canonical) => {
+                    ensure!(canonical.is_dir(), "`opencast.downloads_path` is not a directory");
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    warn!("`opencast.downloads_path` does not exist (yet)");
+                }
+                Err(e) => return Err(e).context("could not canonicalize `opencast.downloads_path`"),
+            }
+        }
+
+        Ok(())
+    }
 }
