@@ -88,7 +88,8 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
                     "not allowed -> response: 204 with X-Accel-Redirect");
 
                 Response::builder()
-                    .header("X-Accel-Redirect", x_accel_redirect_header(prefix, path.full_path_raw()))
+                    .header("X-Accel-Redirect",
+                        x_accel_redirect_header(prefix, path.full_path_raw()))
                     .status(StatusCode::NO_CONTENT)
                     .body(Body::Empty)
                     .expect("failed to build response with empty body")

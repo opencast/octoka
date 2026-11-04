@@ -161,7 +161,8 @@ impl<'a> PathParts<'a> {
     /// The publication channel, e.g. `engage-player` for most standard files.
     /// Percent-decoded
     pub fn channel(&self) -> &str {
-        &self.without_prefix_decoded()[self.start_channel as usize + 1..self.start_event_id as usize]
+        &self.without_prefix_decoded()
+            [self.start_channel as usize + 1..self.start_event_id as usize]
     }
 
     /// The event ID.
