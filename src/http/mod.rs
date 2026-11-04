@@ -146,6 +146,17 @@ fn add_cors_headers(
     // whitespace. See https://github.com/seanmonstar/httparse/pull/48
     // and RFC 7230 section 3.2.3.
 
+    // If CORS is enabled at all, every response depends on the `Origin` header:
+    // requests without it or from a non-allowed origin get no CORS headers,
+    // requests from an allowed origin do, and the `Access-Control-Allow-Origin`
+    // value differs per origin. So we have to set `Vary: Origin` on all of
+    // these responses, telling caches to include the origin in the cache key.
+    //
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Access-Control-Allow-Origin#cors_and_caching
+    if !config.cors_allowed_origins.is_empty() {
+        response.headers_mut().unwrap().append(header::VARY, HeaderValue::from_static("Origin"));
+    }
+
     // Only allow CORS if Origin is allowed by the config. This also excludes
     // `null`.
     let origin = match req.headers().get(header::ORIGIN) {
@@ -196,19 +207,6 @@ fn add_cors_headers(
         // would make this caching unsafe.
         (header::ACCESS_CONTROL_MAX_AGE, HeaderValue::from_static("86400")),
     ]);
-
-    // If we set the `Access-Control-Allow-Origin` depending on the `Origin`
-    // header, then we also must set the `Vary` header here. Otherwise browsers
-    // are allowed to cache one response (including the `Access-Control-Allow-Origin`
-    // header) for one specific origin and use it for requests done from a different
-    // origin. And then the browser rejects it, throwing a CORS error, because the
-    // header does not match the origin. Setting this header means the browser
-    // needs to include the origin in the cache key. Also see:
-    //
-    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Access-Control-Allow-Origin#cors_and_caching
-    if config.cors_allowed_origins.len() > 1 {
-        response.headers_mut().unwrap().append(header::VARY, HeaderValue::from_static("Origin"));
-    }
 }
 
 /// Sends a HEAD request to Opencast with the headers and path/query of `req`.
