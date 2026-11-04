@@ -40,14 +40,14 @@ pub async fn serve_file(
 
     // Join, resolve and canonicalize path. Check for path traversal attacks.
     let fs_path = handle_io_err!(
-        downloads_path.join(path.without_prefix()).canonicalize(),
+        downloads_path.join(path.without_prefix_decoded()).canonicalize(),
         "canonicalizing path",
     );
     let event_dir = downloads_path.join(path.rel_event_dir());
     // Double check necessary in case `path.rel_event_dir()` is absolute.
     if !fs_path.starts_with(&event_dir) || !event_dir.starts_with(downloads_path) {
         warn!(
-            path = path.full_path(),
+            path = path.full_path_raw(),
             "Directory traversal attack detected, responding 400 Bad Request",
         );
         return super::error_response(StatusCode::BAD_REQUEST);
@@ -93,18 +93,18 @@ pub async fn serve_file(
         let range = match HttpRange::parse_bytes(range_header.as_bytes(), file_size) {
             Ok(ranges) if ranges.len() == 1 => ranges[0],
             Ok(_) => {
-                debug!(?range_header, path= path.full_path(), "received multi range request");
+                debug!(?range_header, path = path.full_path_raw(), "received multi range request");
                 return Response::builder()
                     .status(StatusCode::BAD_REQUEST)
                     .body(Body::tiny("multiple ranges in 'Range' header not supported"))
                     .expect("bug: invalid response")
             }
             Err(HttpRangeParseError::InvalidRange) => {
-                debug!(?range_header, path = path.full_path(), "invalid `Range` header");
+                debug!(?range_header, path = path.full_path_raw(), "invalid `Range` header");
                 return super::error_response(StatusCode::BAD_REQUEST);
             }
             Err(HttpRangeParseError::NoOverlap) => {
-                debug!(?range_header, file_size, path = path.full_path(),
+                debug!(?range_header, file_size, path = path.full_path_raw(),
                     "unsatisfiable `Range` header");
                 return super::error_response(StatusCode::RANGE_NOT_SATISFIABLE);
             }

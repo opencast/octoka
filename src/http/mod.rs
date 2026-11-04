@@ -66,7 +66,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
     let jwt = jwt.as_ref().map(|cow| cow.as_ref());
 
     // Perform auth check
-    let mut is_allowed = auth::is_allowed(path, jwt, &ctx).await;
+    let mut is_allowed = auth::is_allowed(&path, jwt, &ctx).await;
 
     // If we cannot authorize the request, maybe Opencast can.
     if !is_allowed && ctx.config.opencast.fallback != FallbackMode::None {
@@ -88,7 +88,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
                     "not allowed -> response: 204 with X-Accel-Redirect");
 
                 Response::builder()
-                    .header("X-Accel-Redirect", x_accel_redirect_header(prefix, path.full_path()))
+                    .header("X-Accel-Redirect", x_accel_redirect_header(prefix, path.full_path_raw()))
                     .status(StatusCode::NO_CONTENT)
                     .body(Body::Empty)
                     .expect("failed to build response with empty body")
@@ -106,7 +106,7 @@ async fn handle(req: Request<Incoming>, ctx: Arc<Context>) -> Response {
 
         // Potentially add `X-Accel-Redirect` header.
         if let OnAllow::XAccelRedirect(prefix) = &ctx.config.http.on_allow {
-            let value = x_accel_redirect_header(prefix, path.without_prefix());
+            let value = x_accel_redirect_header(prefix, path.without_prefix_raw());
             builder = builder.header("X-Accel-Redirect", value);
         }
 

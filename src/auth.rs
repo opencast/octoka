@@ -6,7 +6,7 @@ use crate::{http::Context, opencast::PathParts, prelude::*};
 const JWT_VERIFY_TIMEOUT: Duration = Duration::from_millis(2500);
 
 pub async fn is_allowed(
-    path: PathParts<'_>,
+    path: &PathParts<'_>,
     jwt: Option<&str>,
     ctx: &Context,
 ) -> bool {
