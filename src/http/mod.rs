@@ -412,12 +412,29 @@ pub async fn serve_on(ctx: Context, listener: TcpListener) -> Result<()> {
     Ok(())
 }
 
-/// Future that resolves when a shutdown signal is received by our app.
+/// Future that resolves when a shutdown signal (SIGINT, and SIGTERM on unix) is
+/// received by our app.
 async fn shutdown_signal() {
-    // Wait for the CTRL+C signal
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to install CTRL+C signal handler");
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install CTRL+C signal handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM signal handler")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => info!("Received SIGINT"),
+        _ = terminate => info!("Received SIGTERM"),
+    }
 }
 
 /// This just wraps another future and catches all panics that might occur when
