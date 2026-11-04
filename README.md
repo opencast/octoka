@@ -21,7 +21,7 @@ For information on how to set this up, see [`docs/reverse-proxy.md`](https://git
 ## Features
 
 - JWT:
-  - Signing algorithms: `EdDSA` (ed25519), `ED256`, `ED384`
+  - Signing algorithms: `EdDSA` (ed25519), `ES256`/`ES384`/`ES512`, `RS256`/`RS384`/`RS512`, `PS256`/`PS384`/`PS512`
   - Fetching public keys from multiple JWKS URLs
   - Key caching & automatic refresh
 - Opencast fallback: if JWT don't grant access, ask Opencast by forwarding request
@@ -29,7 +29,7 @@ For information on how to set this up, see [`docs/reverse-proxy.md`](https://git
   - Efficient file server (if configured)
   - `X-Accel-Redirect` (if configured)
   - Configurable CORS replies
-- Fast & efficient: >50k req/s while using only a few MB of memory (with `http.serve_files = false`)
+- Fast & efficient: >50k req/s while using only a few MB of memory (when not serving files itself, i.e. `http.on_allow` is not `"file"`)
 
 ### HTTP file server details
 
