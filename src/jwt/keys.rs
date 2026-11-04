@@ -154,7 +154,7 @@ impl Keys {
 ///
 /// This is somewhat non-trivial as we want to refresh some keys in response to
 /// incoming requests, but want to make incoming requests very fast to reply to
-/// and protect against DOS attackes that try to force us refetching JWKS all
+/// and protect against DOS attacks that try to force us refetching JWKS all
 /// the time. We also don't want to have two fetches for the same URL at the
 /// same time. If a second request needs to refresh the same source, that
 /// should just wait for the refresh triggered by the first refresh to finish.

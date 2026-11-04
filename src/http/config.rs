@@ -12,7 +12,7 @@ pub struct HttpConfig {
     ///   `opencast.downloads_path` to be set!
     /// - "x-accel-redirect:<prefix>": status 204, empty body, `X-Accel-Redirect`
     ///   header is set to `<prefix>/<stripped_path>` where `stripped_path` is
-    ///   therequest path stripped of `opencast.path_prefixes`.
+    ///   the request path stripped of `opencast.path_prefixes`.
     #[config(default = "file")]
     pub on_allow: OnAllow,
 

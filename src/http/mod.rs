@@ -146,6 +146,17 @@ fn add_cors_headers(
     // whitespace. See https://github.com/seanmonstar/httparse/pull/48
     // and RFC 7230 section 3.2.3.
 
+    // If CORS is enabled at all, every response depends on the `Origin` header:
+    // requests without it or from a non-allowed origin get no CORS headers,
+    // requests from an allowed origin do, and the `Access-Control-Allow-Origin`
+    // value differs per origin. So we have to set `Vary: Origin` on all of
+    // these responses, telling caches to include the origin in the cache key.
+    //
+    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Access-Control-Allow-Origin#cors_and_caching
+    if !config.cors_allowed_origins.is_empty() {
+        response.headers_mut().unwrap().append(header::VARY, HeaderValue::from_static("Origin"));
+    }
+
     // Only allow CORS if Origin is allowed by the config. This also excludes
     // `null`.
     let origin = match req.headers().get(header::ORIGIN) {
@@ -196,19 +207,6 @@ fn add_cors_headers(
         // would make this caching unsafe.
         (header::ACCESS_CONTROL_MAX_AGE, HeaderValue::from_static("86400")),
     ]);
-
-    // If we set the `Access-Control-Allow-Origin` depending on the `Origin`
-    // header, then we also must set the `Vary` header here. Otherwise browsers
-    // are allowed to cache one response (including the `Access-Control-Allow-Origin`
-    // header) for one specific origin and use it for requests done from a different
-    // origin. And then the browser rejects it, throwing a CORS error, because the
-    // header does not match the origin. Setting this header means the browser
-    // needs to include the origin in the cache key. Also see:
-    //
-    // https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Access-Control-Allow-Origin#cors_and_caching
-    if config.cors_allowed_origins.len() > 1 {
-        response.headers_mut().unwrap().append(header::VARY, HeaderValue::from_static("Origin"));
-    }
 }
 
 /// Sends a HEAD request to Opencast with the headers and path/query of `req`.
@@ -252,7 +250,7 @@ async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<boo
         }
     };
 
-    // In case of 401 (with 'www-authenciate' header, which is required by spec),
+    // In case of 401 (with 'www-authenticate' header, which is required by spec),
     // this is likely a digest auth request and we also reply 401, forwarding
     // the header. nginx's auth_request has the same behavior.
     if response.status() == StatusCode::UNAUTHORIZED
@@ -368,7 +366,18 @@ pub async fn serve_on(ctx: Context, listener: TcpListener) -> Result<()> {
     info!("Listening on http://{}", listener.local_addr()?);
     loop {
         tokio::select! {
-            Ok((stream, _addr)) = listener.accept() => {
+            res = listener.accept() => {
+                let (stream, _addr) = match res {
+                    Ok(v) => v,
+                    Err(e) => {
+                        // Most errors here are transient (e.g. the connection
+                        // was aborted or we ran out of file descriptors). We
+                        // sleep briefly to avoid a hot loop in the latter case.
+                        warn!("failed to accept connection: {e}");
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                        continue;
+                    }
+                };
                 let io = TokioIo::new(stream);
                 let ctx = Arc::clone(&ctx);
                 let conn = http.serve_connection(io, service_fn(move |req| {
@@ -394,19 +403,36 @@ pub async fn serve_on(ctx: Context, listener: TcpListener) -> Result<()> {
             info!("All HTTP connections gracefully closed");
         },
         _ = tokio::time::sleep(shutdown_timeout) => {
-            eprintln!("Timed out wait for all HTTP connections to close");
+            eprintln!("Timed out waiting for all HTTP connections to close");
         }
     }
 
     Ok(())
 }
 
-/// Future that resolves when a shutdown signal is received by our app.
+/// Future that resolves when a shutdown signal (SIGINT, and SIGTERM on unix) is
+/// received by our app.
 async fn shutdown_signal() {
-    // Wait for the CTRL+C signal
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to install CTRL+C signal handler");
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install CTRL+C signal handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM signal handler")
+            .recv()
+            .await;
+    };
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => info!("Received SIGINT"),
+        _ = terminate => info!("Received SIGTERM"),
+    }
 }
 
 /// This just wraps another future and catches all panics that might occur when
@@ -420,7 +446,7 @@ async fn handle_internal_errors(
 
     // The `AssertUnwindSafe` is unfortunately necessary. The whole story of
     // unwind safety is strange. What we are basically saying here is: "if the
-    // future panicks, the global/remaining application state is not 'broken'.
+    // future panics, the global/remaining application state is not 'broken'.
     // It is safe to continue with the program in case of a panic."
     //
     // Hyper catches panics for us anyway, so this changes nothing except that

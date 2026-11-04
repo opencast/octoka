@@ -7,8 +7,7 @@ use crate::config::HttpHost;
 #[derive(Debug, confique::Config)]
 pub struct OpencastConfig {
     /// Path to the Opencast `downloads/` folder, e.g. `/mnt/opencast/downloads`.
-    /// Settings this is required in some situations (e.g. if `http.serve_files`
-    /// is enabled).
+    /// Setting this is required if `http.on_allow` is `"file"`.
     pub downloads_path: Option<PathBuf>,
 
     /// Host of Opencast. Currently used for `fallback`.

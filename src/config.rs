@@ -101,7 +101,7 @@ impl Config {
             }
             *path = path.canonicalize()
                 .context("could not canonicalize `opencast.downloads_path`")?;
-            ensure!(path.is_dir(), "`opencast.downloads_psth` is not a directory");
+            ensure!(path.is_dir(), "`opencast.downloads_path` is not a directory");
         }
 
         Ok(())
