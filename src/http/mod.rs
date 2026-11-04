@@ -368,7 +368,18 @@ pub async fn serve_on(ctx: Context, listener: TcpListener) -> Result<()> {
     info!("Listening on http://{}", listener.local_addr()?);
     loop {
         tokio::select! {
-            Ok((stream, _addr)) = listener.accept() => {
+            res = listener.accept() => {
+                let (stream, _addr) = match res {
+                    Ok(v) => v,
+                    Err(e) => {
+                        // Most errors here are transient (e.g. the connection
+                        // was aborted or we ran out of file descriptors). We
+                        // sleep briefly to avoid a hot loop in the latter case.
+                        warn!("failed to accept connection: {e}");
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                        continue;
+                    }
+                };
                 let io = TokioIo::new(stream);
                 let ctx = Arc::clone(&ctx);
                 let conn = http.serve_connection(io, service_fn(move |req| {
