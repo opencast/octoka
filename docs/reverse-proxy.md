@@ -113,7 +113,7 @@ This can use built-in file serving or nginx file server via `X-Accel-Redirect`.
 
 ### Fallback via `X-Accel-Redirect`
 
-This is needlesly complicated compared with other methods...
+This is needlessly complicated compared with other methods...
 
 - `http.on_deny = "x-accel-redirect:/static-opencast-fallback"`
 

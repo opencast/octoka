@@ -25,7 +25,7 @@ pub struct LogConfig {
     ///
     /// Take the following example: the following config only allows ≥"info"
     /// logs from octoka generally, but also ≥"trace" messages from the `http`
-    /// submodule. But it completely disables all logs from `tobira::http::fs`.
+    /// submodule. But it completely disables all logs from `octoka::http::fs`.
     /// Finally, it also enabled ≥"debug" messages from one of octoka's
     /// dependencies, the HTTP library `hyper`.
     ///

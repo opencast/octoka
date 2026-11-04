@@ -252,7 +252,7 @@ async fn ask_opencast(orig_req: &Request<Incoming>, ctx: &Context) -> Result<boo
         }
     };
 
-    // In case of 401 (with 'www-authenciate' header, which is required by spec),
+    // In case of 401 (with 'www-authenticate' header, which is required by spec),
     // this is likely a digest auth request and we also reply 401, forwarding
     // the header. nginx's auth_request has the same behavior.
     if response.status() == StatusCode::UNAUTHORIZED
@@ -405,7 +405,7 @@ pub async fn serve_on(ctx: Context, listener: TcpListener) -> Result<()> {
             info!("All HTTP connections gracefully closed");
         },
         _ = tokio::time::sleep(shutdown_timeout) => {
-            eprintln!("Timed out wait for all HTTP connections to close");
+            eprintln!("Timed out waiting for all HTTP connections to close");
         }
     }
 
@@ -448,7 +448,7 @@ async fn handle_internal_errors(
 
     // The `AssertUnwindSafe` is unfortunately necessary. The whole story of
     // unwind safety is strange. What we are basically saying here is: "if the
-    // future panicks, the global/remaining application state is not 'broken'.
+    // future panics, the global/remaining application state is not 'broken'.
     // It is safe to continue with the program in case of a panic."
     //
     // Hyper catches panics for us anyway, so this changes nothing except that

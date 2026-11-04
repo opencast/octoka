@@ -26,7 +26,7 @@ pub struct PathParts<'a> {
 impl<'a> PathParts<'a> {
     /// Parses the given path into its components. Returns `None` if the path
     /// is not understood, does not start with `/` or does not start with any
-    /// prefxies configured in `opencast.path_prefixes`.
+    /// prefixes configured in `opencast.path_prefixes`.
     pub fn parse(path: &'a str, config: &OpencastConfig) -> Option<Self> {
         if !path.starts_with('/') {
             return None;
